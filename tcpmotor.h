@@ -70,161 +70,181 @@ public:
     virtual void OnFailure() {}
 };
 ///////////////////////////////////////////////////////////////////////////////
-//socket function
+//socket util
 ///////////////////////////////////////////////////////////////////////////////
-std::string make_key(const std::string &ip, int port)
+class SocketUtil
 {
-    return ip + ":" + std::to_string(port);
-}
-int socket_create_bind(const std::string &ip, int port)
-{
-    int sfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if(sfd == INVALID_SOCKET)
+public:
+    static std::string MakeKeyByIpPort(const std::string &ip, int port)
     {
-        printf("invalid socket !");
+        return ip + ":" + std::to_string(port);
+    }
+    static int CreateBind(const std::string &ip, int port)
+    {
+        int sfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        if(sfd == INVALID_SOCKET)
+        {
+            printf("invalid socket !");
+            return sfd;
+        }
+        //绑定端口 
+        sockaddr_in serverAddr;
+        serverAddr.sin_family = AF_INET;
+        //serverAddr.sin_addr.s_addr = inet_addr(ip);
+        serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+        serverAddr.sin_port = htons(port);
+        //绑定  
+        int iErrorMsg = bind(sfd, (sockaddr*)&serverAddr, sizeof(serverAddr));  
+        if (iErrorMsg < 0)  
+        {  
+            //绑定失败  
+            printf("bind failed with error : %d", iErrorMsg); 
+            return -2;  
+        }
+        printf("bind success: port[%d], fd[%d]", port, sfd);
         return sfd;
     }
-    //绑定端口 
-    sockaddr_in serverAddr;
-    serverAddr.sin_family = AF_INET;
-    //serverAddr.sin_addr.s_addr = inet_addr(ip);
-    serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    serverAddr.sin_port = htons(port);
-    //绑定  
-    int iErrorMsg = bind(sfd, (sockaddr*)&serverAddr, sizeof(serverAddr));  
-    if (iErrorMsg < 0)  
-    {  
-        //绑定失败  
-        printf("bind failed with error : %d", iErrorMsg); 
-        return -2;  
-    }
-    printf("bind success: port[%d], fd[%d]", port, sfd);
-    return sfd;
-}
-int socket_nonblock(int sfd)
-{
-    int flags;
-    //得到文件状态标志
-    flags = fcntl (sfd, F_GETFL, 0);
-    if (flags == INVALID)
+    static int Nonblock(int sfd)
     {
-        printf ("fcntl");
-        return INVALID;
+        int flags;
+        //得到文件状态标志
+        flags = fcntl (sfd, F_GETFL, 0);
+        if (flags == INVALID)
+        {
+            printf("fcntl");
+            return INVALID;
+        }
+        //设置文件状态标志
+        flags |= O_NONBLOCK;
+        if (fcntl (sfd, F_SETFL, flags) == INVALID)
+        {
+            printf("fcntl");
+            return INVALID;
+        }
+        return 0;
     }
-    //设置文件状态标志
-    flags |= O_NONBLOCK;
-    if (fcntl (sfd, F_SETFL, flags) == INVALID)
+    static int Connect(int sfd, const std::string &ip, int port)
     {
-        printf ("fcntl");
-        return INVALID;
-    }
-    return 0;
-}
-int socket_connect(int sfd, const std::string &ip, int port)
-{
-    struct sockaddr_in server_addr; 
-    memset(&server_addr,0,sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = inet_addr(ip.c_str());
-    server_addr.sin_port = htons(port);
+        struct sockaddr_in server_addr; 
+        memset(&server_addr,0,sizeof(server_addr));
+        server_addr.sin_family = AF_INET;
+        server_addr.sin_addr.s_addr = inet_addr(ip.c_str());
+        server_addr.sin_port = htons(port);
 
-    if(connect(sfd,(struct sockaddr *)&server_addr,sizeof(server_addr)) < 0)
-    {
-        printf("connect error");
-        return -2;
+        if(connect(sfd,(struct sockaddr *)&server_addr,sizeof(server_addr)) < 0)
+        {
+            printf("connect error");
+            return -2;
+        }
+        if (Nonblock(sfd) < 0)
+        {
+            printf("nonblock error !");
+            return -3;
+        }
+        //printf("connected to server(ip=%s, port=%d, fd=%d)", ip, port, sfd);
+        return sfd;
     }
-    if (socket_nonblock (sfd) < 0)
+    static int CreateBindListen(const std::string &ip, int port, bool isBlock/* = false*/)
     {
-        printf("nonblock error !");
-        return -3;
+        int sfd = CreateBind(ip, port);
+        if (!isBlock && Nonblock(sfd) == INVALID)
+        {
+            printf("nonblock");
+            abort();
+        }
+        if (listen(sfd, SOMAXCONN) == INVALID)
+        {
+            printf("listen");
+            abort();
+        }
+        return sfd;
     }
-    //printf("connected to server(ip=%s, port=%d, fd=%d)", ip, port, sfd);
-    return sfd;
-}
-int socket_create_bind_listen(const std::string &ip, int port, bool isBlock/* = false*/)
-{
-    int sfd = socket_create_bind(ip, port);
-    if (!isBlock && socket_nonblock(sfd) == INVALID)
+    static int Setsockopt(int sfd)
     {
-        printf("nonblock");
-        abort();
+        int rcvBuff = 524288;//512k
+        if (0 != setsockopt(sfd, SOL_SOCKET, SO_RCVBUF, (const char *)&rcvBuff, sizeof(rcvBuff)))
+        {
+            printf("set rcvBuff failed!");
+            //closesocket(sfd);
+            close(sfd);
+            return INVALID;
+        }
+        int sndBuff = 524288;//512k
+        if (0 != setsockopt(sfd, SOL_SOCKET, SO_SNDBUF, (const char *)&sndBuff, sizeof(sndBuff)))
+        {
+            printf("set sndBuff failed!");
+            //closesocket(sfd);
+            close(sfd);
+            return INVALID;
+        }
+        int nOpt = 1;
+        if (0 != setsockopt(sfd, IPPROTO_TCP, TCP_NODELAY, (const char *)&nOpt, sizeof(nOpt)))
+        {
+            printf("set tcp_nodelay failed!");
+            //closesocket(sfd);
+            close(sfd);
+            return INVALID;
+        }
+        struct linger s_linger;
+        s_linger.l_onoff = 1;
+        s_linger.l_linger = 0;
+        if (0 != setsockopt(sfd, SOL_SOCKET, SO_LINGER, (const char *)&s_linger, sizeof(s_linger)))
+        {
+            printf("set linger failed!");
+            //closesocket(sfd);
+            close(sfd);
+            return INVALID;
+        }
+        ////如果在发送数据的时，希望不经历由系统缓冲区到socket缓冲区的拷贝而影响 
+        //int nZero = 0;
+        //setsockopt(sfd, SOL_SOCKET, SO_SNDBUF, (char *)&nZero, sizeof(nZero));
+        ////同上在recv()完成上述功能(默认情况是将socket缓冲区的内容拷贝到系统缓冲区) 
+        //nZero = 0;
+        //setsockopt(sfd, SOL_SOCKET, SO_RCVBUF, (char *)&nZero, sizeof(nZero));
+        return 0;
     }
-    if (listen(sfd, SOMAXCONN) == INVALID)
-    {
-        printf("listen");
-        abort();
-    }
-    return sfd;
-}
-int socket_setsockopt(int sfd)
-{
-    int rcvBuff = 524288;//512k
-    if (0 != setsockopt(sfd, SOL_SOCKET, SO_RCVBUF, (const char *)&rcvBuff, sizeof(rcvBuff)))
-    {
-        printf("set rcvBuff failed!");
-        //closesocket(sfd);
-        close(sfd);
-        return INVALID;
-    }
-    int sndBuff = 524288;//512k
-    if (0 != setsockopt(sfd, SOL_SOCKET, SO_SNDBUF, (const char *)&sndBuff, sizeof(sndBuff)))
-    {
-        printf("set sndBuff failed!");
-        //closesocket(sfd);
-        close(sfd);
-        return INVALID;
-    }
-    int nOpt = 1;
-    if (0 != setsockopt(sfd, IPPROTO_TCP, TCP_NODELAY, (const char *)&nOpt, sizeof(nOpt)))
-    {
-        printf("set tcp_nodelay failed!");
-        //closesocket(sfd);
-        close(sfd);
-        return INVALID;
-    }
-    struct linger s_linger;
-    s_linger.l_onoff = 1;
-    s_linger.l_linger = 0;
-    if (0 != setsockopt(sfd, SOL_SOCKET, SO_LINGER, (const char *)&s_linger, sizeof(s_linger)))
-    {
-        printf("set linger failed!");
-        //closesocket(sfd);
-        close(sfd);
-        return INVALID;
-    }
-    ////如果在发送数据的时，希望不经历由系统缓冲区到socket缓冲区的拷贝而影响 
-    //int nZero = 0;
-    //setsockopt(sfd, SOL_SOCKET, SO_SNDBUF, (char *)&nZero, sizeof(nZero));
-    ////同上在recv()完成上述功能(默认情况是将socket缓冲区的内容拷贝到系统缓冲区) 
-    //nZero = 0;
-    //setsockopt(sfd, SOL_SOCKET, SO_RCVBUF, (char *)&nZero, sizeof(nZero));
-    return 0;
-}
+    
+};
 ///////////////////////////////////////////////////////////////////////////////
 //main class
 ///////////////////////////////////////////////////////////////////////////////
-void OnRecv(void *lk);
-void OnAccept(void *lk);
 class TcpMotor;
 
 class Link
 {
 public:
-    Link() : fd(0), head(0), end(0), motor(nullptr)
+    Link() : mFd(0), mHead(0), mEnd(0), mMotor(nullptr)
     {
-        memset(buff, 0, MAX_RECBUFF_SIZE);
+        memset(mBuff, 0, MAX_RECBUFF_SIZE);
     }
-    int         fd;
-    int         head;
-    int         end;
-    char        buff[MAX_RECBUFF_SIZE];
-    std::string ip;
-    int         port;
-    callback    recv;
-    //callback send;
-    //callback err;
-    TcpMotor*   motor;
+    virtual ~Link() {}
+    virtual void OnRecv() {}
+    //   
+    int         mFd;
+    int         mHead;
+    int         mEnd;
+    char        mBuff[MAX_RECBUFF_SIZE];
+    std::string mIp;//远端ip
+    int         mPort;//远端port
+    TcpMotor*   mMotor;
 };
+
+class SocketLink : public Link
+{
+public:
+    SocketLink() {}
+    virtual ~SocketLink() {}
+    virtual void OnRecv();
+};
+
+class AcceptLink : public Link
+{
+public:
+    AcceptLink() {}
+    virtual ~AcceptLink() {}
+    virtual void OnRecv();
+};
+
 class TcpMotor
 {
 public:
@@ -232,19 +252,6 @@ public:
     {
         mEpollFd        = epoll_create(256);
         mEvents         = (struct epoll_event *)malloc(sizeof(struct epoll_event) * MAX_EVENT_NUM);
-        int accept_fd   = socket_create_bind_listen("", mPort, false);
-        if (accept_fd > 0)
-        {
-            Link *link  = new Link();
-            link->fd    = accept_fd;
-            link->recv  = OnAccept;
-            link->motor = this;
-            AddLink(link);
-        }
-        else
-        {
-
-        }
     }
     ~TcpMotor()
     {
@@ -257,11 +264,10 @@ public:
     }
     void Run()
     {
-        mIsRunning  = true;
-        Link *link  = new Link();
-        link->fd    = socket_create_bind_listen("", mPort, false);
-        link->recv  = OnAccept;
-        link->motor = this;
+        mIsRunning      = true;
+        Link *link      = new AcceptLink();
+        link->mFd       = SocketUtil::CreateBindListen("", mPort, false);
+        link->mMotor    = this;
         AddLink(link);
         Loop();
     }
@@ -281,9 +287,9 @@ public:
             {
                 if (mEvents[i].events & EPOLLIN)
                 {
-                    Link * link = (Link *)mEvents[i].data.ptr;
+                    Link *link = (Link *)mEvents[i].data.ptr;
                     if (link)
-                        link->recv(mEvents[i].data.ptr);
+                        link->OnRecv();
                 }
             }
             //TODO 发送数据
@@ -304,27 +310,27 @@ public:
     //
     int AddLink(Link *link)
     {
-        std::string key = make_key(link->ip, link->port);
+        std::string key = SocketUtil::MakeKeyByIpPort(link->mIp, link->mPort);
         auto it = mIpPortLink.find(key);
         if (it == mIpPortLink.end())
             mIpPortLink[key] = link;
         struct epoll_event event;
         event.events    = EPOLLIN | EPOLLET;
-        event.data.fd   = link->fd;
+        event.data.fd   = link->mFd;
         event.data.ptr  = (void *)link;
-        return epoll_ctl(mEpollFd, EPOLL_CTL_ADD, link->fd, &event);
+        return epoll_ctl(mEpollFd, EPOLL_CTL_ADD, link->mFd, &event);
     }
     int DelLink(Link *link)
     {
-        close(link->fd);
-        return epoll_ctl(mEpollFd, EPOLL_CTL_DEL, link->fd, NULL);
+        close(link->mFd);
+        return epoll_ctl(mEpollFd, EPOLL_CTL_DEL, link->mFd, NULL);
     }
     int ModLink(Link *link, bool isWrite)
     {
         struct epoll_event event;
         event.events    = EPOLLIN | (isWrite ? EPOLLOUT : 0);
         event.data.ptr  = (void *)link;
-        return epoll_ctl(mEpollFd, EPOLL_CTL_MOD, link->fd, &event);
+        return epoll_ctl(mEpollFd, EPOLL_CTL_MOD, link->mFd, &event);
     }
     int Wait(int timeout)
     {
@@ -345,53 +351,13 @@ private:
     moodycamel::ConcurrentQueue<packet*> mRecvQueue;
     moodycamel::ConcurrentQueue<packet*> mSendQueue;
 };
-///////////////////////////////////////////////////////////////////////////////
-//callback function
-///////////////////////////////////////////////////////////////////////////////
-void OnAccept(void *lk)
+
+void SocketLink::OnRecv()
 {
-    Link *link = (Link *)lk;
-    if (!link) return;
-    while (1)
-    {
-        struct sockaddr_in addr;
-        socklen_t in_len = sizeof(struct sockaddr_in);
-        int socket_fd = accept(link->fd, (struct sockaddr *)&addr, &in_len);
-        if (socket_fd == INVALID_SOCKET)
-        {
-            // if (errno == EAGAIN || errno == EWOULDBLOCK)
-            printf("accept");
-            break;
-        }
-        socket_setsockopt(socket_fd);
-        char ip[NI_MAXHOST], port[NI_MAXSERV];
-        if (getnameinfo((struct sockaddr *)&addr, in_len, ip, sizeof ip, port, sizeof port, NI_NUMERICHOST | NI_NUMERICSERV) != 0)
-        {
-            std::cout << "Accepted connection socket_nonblock (host=" << ip << ", port=" << port << ", socket_fd=" << std::to_string(socket_fd) << ")" << std::endl;
-            continue;
-        }
-        std::cout << "Accepted connection socket_nonblock (host=" << ip << ", port=" << port << ", socket_fd=" << std::to_string(socket_fd) << ")" << std::endl;    
-        if (socket_nonblock(socket_fd) < 0)
-            continue;
-        //
-        Link *new_link      = new Link();
-        new_link->fd        = socket_fd;
-        new_link->recv      = OnRecv;
-        new_link->motor     = link->motor;
-        new_link->ip        = ip;
-        new_link->port      = atoi(port);
-        link->motor->AddLink(new_link);
-    }
-}
-void OnRecv(void *lk)
-{
-    Link *link = (Link *)lk;
-    if (!link)
-        return;
     int done = 0;
     while (1)
     {
-        int count = recv(link->fd, link->buff + link->end, MAX_RECBUFF_SIZE - link->end, 0);
+        int count = recv(mFd, mBuff + mEnd, MAX_RECBUFF_SIZE - mEnd, 0);
         if (count == -1)
         {
             if (errno == 0 || errno == EAGAIN)
@@ -406,61 +372,61 @@ void OnRecv(void *lk)
             done = 1;//go back to the main loop.
         else
         {
-            link->end += count;
-            while (link->head < link->end)
+            mEnd += count;
+            while (mHead < mEnd)
             {
-                if (link->head + sizeof(packet) < MAX_RECBUFF_SIZE)
+                if (mHead + sizeof(packet) < MAX_RECBUFF_SIZE)
                 {
-                    packet *node = (packet *)(link->buff + link->head);
+                    packet *node = (packet *)(mBuff + mHead);
                     if (node && node->len < MAX_PACKET_SIZE)
                     {
-                        if (link->head + node->len > link->end) // 短包 
+                        if (mHead + node->len > mEnd) // 断包 
                         {
-                            if (link->head + node->len > MAX_RECBUFF_SIZE)
+                            if (mHead + node->len > MAX_RECBUFF_SIZE)
                             {
-                                link->end -= link->head;
-                                memcpy(link->buff, link->buff + link->head, link->end);
-                                link->head = 0;
+                                mEnd -= mHead;
+                                memcpy(mBuff, mBuff + mHead, mEnd);
+                                mHead = 0;
                             }
                             break;// Goto while(1) 
                         }
                         else
                         {
                             // 消费
-                            link->motor->RecvHandler(link->ip, link->port, node, node->len);
-                            link->head += node->len;
+                            mMotor->RecvHandler(mIp, mPort, node, node->len);
+                            mHead += node->len;
                         }
                     }
                     else //错误包 
                     {
-                        link->head = 0;
-                        link->end = 0;
-                        done = 2;
+                        mHead = 0;
+                        mEnd  = 0;
+                        done  = 2;
                         break;// Goto while(1) 
                     }
                 }
                 else
                 {
-                    link->end -= link->head;
-                    memcpy(link->buff, link->buff + link->head, link->end); //
-                    link->head = 0;
+                    mEnd -= mHead;
+                    memcpy(mBuff, mBuff + mHead, mEnd); //
+                    mHead = 0;
                     break;// Goto while(1) 
                 }
             }
         }
         //
-        if (link->end == MAX_RECBUFF_SIZE)
+        if (mEnd == MAX_RECBUFF_SIZE)
         {
-            if (link->head < MAX_RECBUFF_SIZE)
+            if (mHead < MAX_RECBUFF_SIZE)
             {
-                link->end -= link->head;
-                memcpy(link->buff, link->buff + link->head, link->end); //
-                link->head = 0;
+                mEnd -= mHead;
+                memcpy(mBuff, mBuff + mHead, mEnd); //
+                mHead = 0;
             }
-            else if (link->head == MAX_RECBUFF_SIZE)
+            else if (mHead == MAX_RECBUFF_SIZE)
             {
-                link->head = 0;
-                link->end = 0;
+                mHead = 0;
+                mEnd  = 0;
             }
             else
                 done = 2;
@@ -470,11 +436,45 @@ void OnRecv(void *lk)
             break;//Go back to the main loop.
         else if (done == 2)
         {
-            link->motor->DelLink(link);
+            mMotor->DelLink(this);
             break;
         }
     }
 }
+
+void AcceptLink::OnRecv()
+{
+    while (1)
+    {
+        struct sockaddr_in addr;
+        socklen_t in_len    = sizeof(struct sockaddr_in);
+        int socket_fd       = accept(mFd, (struct sockaddr *)&addr, &in_len);
+        if (socket_fd == INVALID_SOCKET)
+        {
+            // if (errno == EAGAIN || errno == EWOULDBLOCK)
+            printf("accept");
+            break;
+        }
+        SocketUtil::Setsockopt(socket_fd);
+        char ip[NI_MAXHOST], port[NI_MAXSERV];
+        if (getnameinfo((struct sockaddr *)&addr, in_len, ip, sizeof ip, port, sizeof port, NI_NUMERICHOST | NI_NUMERICSERV) != 0)
+        {
+            std::cout << "Accepted connection socket_nonblock (host=" << ip << ", port=" << port << ", socket_fd=" << std::to_string(socket_fd) << ")" << std::endl;
+            continue;
+        }
+        std::cout << "Accepted connection socket_nonblock (host=" << ip << ", port=" << port << ", socket_fd=" << std::to_string(socket_fd) << ")" << std::endl;    
+        if (SocketUtil::Nonblock(socket_fd) < 0)
+            continue;
+        //
+        Link *new_link      = new SocketLink();
+        new_link->mFd       = socket_fd;
+        new_link->mMotor    = mMotor;
+        new_link->mIp       = ip;
+        new_link->mPort     = atoi(port);
+        mMotor->AddLink(new_link);
+    }
+}
+
 // void OnSend(void *vp)
 // {
 //     Service *service = (Service *)vp;
