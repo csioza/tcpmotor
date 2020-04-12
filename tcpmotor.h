@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <sys/time.h>
 //
 #include "concurrentqueue.h"
 
@@ -51,6 +52,21 @@ struct Packet  //用于线程的收发队列里
     char data[0];
 };
 #pragma pack()
+
+class TimeUtil
+{
+public:
+    static uint64 NowTimeMs() {
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        return tv.tv_sec * 1000 + tv.tv_usec / 1000;
+    }
+    static uint64 NowTimeUs() {
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        return tv.tv_sec * 1000000 + tv.tv_usec;
+    }
+};
 ///////////////////////////////////////////////////////////////////////////////
 //handler class
 ///////////////////////////////////////////////////////////////////////////////
@@ -62,8 +78,10 @@ public:
     virtual void OnRecv(std::string callback_ip, int callback_port, char* content, int contentLen) 
     {
         std::string data(content, content + contentLen);
-        printf("TcpRecvHandler::OnRecv from ip[%s], port[%d], content[%s], contentLen[%d]\n",
-                callback_ip.c_str(), callback_port, data.c_str(), contentLen);
+        int64 now = TimeUtil::NowTimeUs();
+
+        printf("TcpRecvHandler::OnRecv from ip[%s], port[%d], content[%s], contentLen[%d], sub[%d]\n",
+                callback_ip.c_str(), callback_port, data.c_str(), contentLen, now - stoll(data));
     }
 };
 class TcpSendHandler
@@ -79,6 +97,18 @@ public:
     {
         printf("TcpSendHandler::OnFailure to ip[%s], port[%d]\n", ip.c_str(), port);
     }
+};
+class RecvPacket
+{
+public:
+    RecvPacket(std::string ip, int port, char* data, int len) : mIp(ip), mPort(port)
+    {
+        mData = std::string(data, data + len);
+    }
+    ~RecvPacket() {}
+    std::string     mData;
+    std::string     mIp;
+    int             mPort;
 };
 class SendPacket
 {
@@ -116,7 +146,7 @@ public:
         char ipStr[32];
         const char* ret = inet_ntop(host->h_addrtype, host->h_addr_list[0], ipStr, sizeof(ipStr));
         if (NULL == ret) {
-            std::cout << "hostname transform to ip failed" << std::endl;
+            std::cout << "hostname transform to ip failed\n" << std::endl;
             return false;
         }
         Ip = ipStr;
@@ -131,7 +161,7 @@ public:
         int sfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         if(sfd == INVALID_SOCKET)
         {
-            std::cout << "invalid socket !" << std::endl;
+            std::cout << "invalid socket !\n" << std::endl;
             return sfd;
         }
         //绑定端口 
@@ -173,7 +203,7 @@ public:
         int sfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         if(sfd == INVALID_SOCKET)
         {
-            std::cout << "invalid socket !" << std::endl;
+            std::cout << "invalid socket !\n" << std::endl;
             return sfd;
         }
         struct sockaddr_in server_addr; 
@@ -216,7 +246,7 @@ public:
         int rcvBuff = 524288;//512k
         if (0 != setsockopt(sfd, SOL_SOCKET, SO_RCVBUF, (const char *)&rcvBuff, sizeof(rcvBuff)))
         {
-            printf("set rcvBuff failed!");
+            printf("set rcvBuff failed!\n");
             //closesocket(sfd);
             close(sfd);
             return INVALID;
@@ -224,7 +254,7 @@ public:
         int sndBuff = 524288;//512k
         if (0 != setsockopt(sfd, SOL_SOCKET, SO_SNDBUF, (const char *)&sndBuff, sizeof(sndBuff)))
         {
-            printf("set sndBuff failed!");
+            printf("set sndBuff failed!\n");
             //closesocket(sfd);
             close(sfd);
             return INVALID;
@@ -232,7 +262,7 @@ public:
         int nOpt = 1;
         if (0 != setsockopt(sfd, IPPROTO_TCP, TCP_NODELAY, (const char *)&nOpt, sizeof(nOpt)))
         {
-            printf("set tcp_nodelay failed!");
+            printf("set tcp_nodelay failed!\n");
             //closesocket(sfd);
             close(sfd);
             return INVALID;
@@ -242,17 +272,17 @@ public:
         s_linger.l_linger = 0;
         if (0 != setsockopt(sfd, SOL_SOCKET, SO_LINGER, (const char *)&s_linger, sizeof(s_linger)))
         {
-            printf("set linger failed!");
+            printf("set linger failed!\n");
             //closesocket(sfd);
             close(sfd);
             return INVALID;
         }
-        ////如果在发送数据的时，希望不经历由系统缓冲区到socket缓冲区的拷贝而影响 
-        //int nZero = 0;
-        //setsockopt(sfd, SOL_SOCKET, SO_SNDBUF, (char *)&nZero, sizeof(nZero));
-        ////同上在recv()完成上述功能(默认情况是将socket缓冲区的内容拷贝到系统缓冲区) 
-        //nZero = 0;
-        //setsockopt(sfd, SOL_SOCKET, SO_RCVBUF, (char *)&nZero, sizeof(nZero));
+        //如果在发送数据的时，希望不经历由系统缓冲区到socket缓冲区的拷贝而影响 
+        int nZero = 0;
+        setsockopt(sfd, SOL_SOCKET, SO_SNDBUF, (char *)&nZero, sizeof(nZero));
+        //同上在recv()完成上述功能(默认情况是将socket缓冲区的内容拷贝到系统缓冲区) 
+        nZero = 0;
+        setsockopt(sfd, SOL_SOCKET, SO_RCVBUF, (char *)&nZero, sizeof(nZero));
         return 0;
     }
     
