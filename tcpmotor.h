@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <iostream> 
 #include <string>
-#include <map>
+#include <unordered_map>
 #include <vector>
 #include <stdbool.h>
 #include <cstring>
@@ -462,7 +462,7 @@ private:
     bool                    mIsRunning;
     TcpRecvHandler*         mRecvHandler;
     TcpSendHandler*         mSendHandler;
-    std::map<std::string, Link*> mIpPortLink;//key: ip:port
+    std::unordered_map<std::string, Link*> mIpPortLink;//key: ip:port
     //
     int                     mEpollFd;
     struct epoll_event      *mEvents;
