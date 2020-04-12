@@ -261,7 +261,6 @@ public:
 //main class
 ///////////////////////////////////////////////////////////////////////////////
 class TcpMotor;
-
 class Link
 {
 public:
@@ -309,11 +308,6 @@ public:
     {
         delete mEvents;
     }
-    //
-    void Start()
-    {
-        mThread = std::thread(&TcpMotor::Run, this);
-    }
     void Run()
     {
         mIsRunning      = true;
@@ -325,7 +319,7 @@ public:
         link->mMotor    = this;
         AddLink(link);
         std::cout << "TcpMotor running!" << std::endl;
-        Loop();
+        mThread = std::thread(&TcpMotor::Loop, this);
     }
     void Stop()
     {
@@ -352,7 +346,6 @@ public:
             SendHandler(cnt);
         }
     }
-    //
     void SetRecvHandler(TcpRecvHandler* recv) { mRecvHandler = recv; }
     void SetSendHandler(TcpSendHandler* send) { mSendHandler = send; }
     void RecvHandler(std::string callback_ip, int callback_port, void* content, int contentLen)
@@ -363,7 +356,6 @@ public:
     {
         for (int i = 0; i < num; ++i)
         {
-            //std::cout << "SendHandler" << std::endl;
             SendPacket *packet = nullptr;
             bool result = mSendQueue.try_dequeue(packet);
             if (!result || !packet)
@@ -374,7 +366,6 @@ public:
             if (it == mIpPortLink.end())
             {
                 int sfd = SocketUtil::Connect(packet->mIp, packet->mPort);
-                //std::cout << "SendHandler " << std::to_string(sfd) << std::endl;
                 if (sfd < 0)
                     continue;
                 link                = new SocketLink();
@@ -422,14 +413,11 @@ public:
             delete packet;
         }
     }
-    //
     void Send(std::string ip, int port, void* data, int len, void* ctx)
     {
         SendPacket *packet = new SendPacket(ip, port, data, len, ctx);
         bool r = mSendQueue.enqueue(packet);
-        //printf("send to ip[%s], port[%5d], result[%d]\n", ip.c_str(), port, r);
     }
-    //
     int AddLink(Link *link)
     {
         std::string key = SocketUtil::MakeKeyByIpPort(link->mIp, link->mPort);
@@ -467,9 +455,7 @@ public:
     }
     int Wait(int timeout)
     {
-        int result = epoll_wait(mEpollFd, mEvents, MAX_EVENT_NUM, timeout);
-        //std::cout << "Wait mEpollFd=" << std::to_string(mEpollFd) << ", result=" << std::to_string(result) << std::endl;
-        return result;
+        return epoll_wait(mEpollFd, mEvents, MAX_EVENT_NUM, timeout);
     }
 private:
     int                     mPort;
@@ -486,7 +472,6 @@ private:
     //moodycamel::ConcurrentQueue<Packet*> mRecvQueue;
     moodycamel::ConcurrentQueue<SendPacket*> mSendQueue;
 };
-
 void SocketLink::OnRecv()
 {
     int done = 0;
@@ -496,15 +481,15 @@ void SocketLink::OnRecv()
         if (count == -1)
         {
             if (errno == 0 || errno == EAGAIN)
-                done = 1;//go back to the main loop.
+                done = 1;
             else
             {
                 printf("err recv count:%d errno:%d\n",count,errno);
-                done = 2;//close the cocket.
+                done = 2;
             }
         }
         else if (count == 0)
-            done = 1;//go back to the main loop.
+            done = 1;
         else
         {
             mEnd += count;
@@ -524,7 +509,7 @@ void SocketLink::OnRecv()
                                 memcpy(mBuff, mBuff + mHead, mEnd);
                                 mHead = 0;
                             }
-                            break;// Goto while(1) 
+                            break;
                         }
                         else
                         {
@@ -538,15 +523,15 @@ void SocketLink::OnRecv()
                         mHead = 0;
                         mEnd  = 0;
                         done  = 2;
-                        break;// Goto while(1) 
+                        break;
                     }
                 }
                 else
                 {
                     mEnd -= mHead;
-                    memcpy(mBuff, mBuff + mHead, mEnd); //
+                    memcpy(mBuff, mBuff + mHead, mEnd);
                     mHead = 0;
-                    break;// Goto while(1) 
+                    break;
                 }
             }
         }
@@ -556,7 +541,7 @@ void SocketLink::OnRecv()
             if (mHead < MAX_RECBUFF_SIZE)
             {
                 mEnd -= mHead;
-                memcpy(mBuff, mBuff + mHead, mEnd); //
+                memcpy(mBuff, mBuff + mHead, mEnd);
                 mHead = 0;
             }
             else if (mHead == MAX_RECBUFF_SIZE)
@@ -569,7 +554,7 @@ void SocketLink::OnRecv()
         }
         //
         if (done == 1)
-            break;//Go back to the main loop.
+            break;
         else if (done == 2)
         {
             mMotor->DelLink(this);
@@ -577,10 +562,8 @@ void SocketLink::OnRecv()
         }
     }
 }
-
 void AcceptLink::OnRecv()
 {
-    std::cout << "AcceptLink::OnRecv()" << std::endl;
     while (1)
     {
         struct sockaddr_in addr;
@@ -588,22 +571,19 @@ void AcceptLink::OnRecv()
         int socket_fd       = accept(mFd, (struct sockaddr *)&addr, &in_len);
         if (socket_fd == INVALID_SOCKET)
         {
-            // if (errno == EAGAIN || errno == EWOULDBLOCK)
-            printf("accept failed\n");
+            printf("all have accepted\n");
             break;
         }
         SocketUtil::Setsockopt(socket_fd);
         char ip[NI_MAXHOST], port[NI_MAXSERV];
         if (getnameinfo((struct sockaddr *)&addr, in_len, ip, sizeof ip, port, sizeof port, NI_NUMERICHOST | NI_NUMERICSERV) != 0)
         {
-            std::cout << "Accepted connection (host=" << ip << ", port=" << port << ", socket_fd=" << std::to_string(socket_fd) << ")" << std::endl;
+            std::cout << "Accepted connection (ip=" << ip << ", port=" << port << ", socket_fd=" << std::to_string(socket_fd) << ")" << std::endl;
             continue;
         }
         if (SocketUtil::Nonblock(socket_fd) < 0)
             continue;
-
-        std::cout << "Accepted connection (host=" << ip << ", port=" << port << ", socket_fd=" << std::to_string(socket_fd) << ")" << std::endl;    
-        
+        std::cout << "Accepted connection (ip=" << ip << ", port=" << port << ", socket_fd=" << std::to_string(socket_fd) << ")" << std::endl;    
         Link *new_link      = new SocketLink();
         new_link->mFd       = socket_fd;
         new_link->mMotor    = mMotor;
@@ -612,48 +592,5 @@ void AcceptLink::OnRecv()
         mMotor->AddLink(new_link);
     }
 }
-
-// void OnSend(void *vp)
-// {
-//     Service *service = (Service *)vp;
-//     if (!service)
-//         return;
-//     static char * node = (char *)malloc(MAX_PACKET_SIZE);
-//     if (!node || !service->send_ring->TryGetNode(node) == 0)
-//         return;
-//     if (service->send_ring->TryGetNode(node) == 0)
-//     {
-//         netnode *snode = (netnode *)node;
-//         Link *link = (Link *)(snode->link);
-//         if (!snode || !link)
-//             return;
-//         int want_len = snode->len;
-//         int gone_len = 0;
-//         while (want_len > 0)
-//         {
-//             int n = send(link->fd, node + SIZE_OF_POINT + gone_len, want_len, MSG_NOSIGNAL);
-//             if (n >= 0)
-//             {
-//                 gone_len += n;
-//                 want_len -= n;
-//                 if (want_len > 0)
-//                 {
-//                     Packet *pack = (Packet *)(node + SIZE_OF_POINT);
-//                     if (pack)
-//                         printf("Sent Half Packet: id[%6d], gid[%3d], gone_len[%2d], want_len[%2d], n[%2d]", pack->id, pack->gid, gone_len, want_len, n);
-//                     sleep(1);
-//                 }
-//             }
-//             else
-//             {
-//                 Packet *pack = (Packet *)(node + SIZE_OF_POINT);
-//                 if (pack)
-//                     printf("Sent Packet: id[%6d], gid[%3d], gone_len[%2d], want_len[%2d], n[%2d]", pack->id, pack->gid, gone_len, want_len, n);
-//                 close_cnt(link);
-//                 break;
-//             }
-//         }
-//     }
-// }
 
 } //namespace dcore

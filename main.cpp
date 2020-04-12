@@ -7,11 +7,11 @@ int main()
     dcore::TcpMotor *server = new dcore::TcpMotor(11111);
     dcore::TcpRecvHandler * handler = new dcore::TcpRecvHandler();
     server->SetRecvHandler(handler);
-    server->Start();
+    server->Run();
 
 
     dcore::TcpMotor *client = new dcore::TcpMotor(11112);
-    client->Start();
+    client->Run();
 
     usleep(1000000);
     for (int i = 0; i < 10000000; ++i)
