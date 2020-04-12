@@ -1,29 +1,27 @@
 #include "tcpmotor.h"
 
+//server
 int main()
 {
-    dcore::TcpMotor *tcp = new dcore::TcpMotor(11111);
 
- //    moodycamel::ConcurrentQueue<int> q;
-	// for (int i = 0; i != 123; ++i)
-	// 	q.enqueue(i);
+    dcore::TcpMotor *server = new dcore::TcpMotor(11111);
+    dcore::TcpRecvHandler * handler = new dcore::TcpRecvHandler();
+    server->SetRecvHandler(handler);
+    server->Start();
 
-	// int item;
-	// for (int i = 0; i != 123; ++i) {
-	// 	q.try_dequeue(item);
-	// 	assert(item == i);
-	// }	
-	std::string hostName;
-	std::string Ip;
-	
-	bool ret = dcore::SocketUtil::GetHostInfo(hostName, Ip);
-	if (true == ret) {
-		std::cout << "hostname: " << hostName << std::endl;
-		std::cout << "Ip: " << Ip << std::endl;
-	}
-    while(true)
+
+    dcore::TcpMotor *client = new dcore::TcpMotor(11112);
+    client->Start();
+
+    usleep(1000000);
+    for (int i = 0; i < 1000000; ++i)
     {
-        usleep(10000000);
+		std::string data = "hellohellohellohellohellohellohellohellohellohellohellohellohellohellohello";
+		client->Send("172.17.0.3", 11111, (char*)data.data(), data.size(), 0);
     }
+
+    while(true)
+        usleep(10000000);
+
     return 0;
 }
