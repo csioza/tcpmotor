@@ -367,7 +367,7 @@ public:
             SendPacket *packet = nullptr;
             bool result = mSendQueue.try_dequeue(packet);
             if (!result || !packet)
-                continue;
+                return;
             std::string key = SocketUtil::MakeKeyByIpPort(packet->mIp, packet->mPort);
             Link *link = nullptr;
             auto it = mIpPortLink.find(key);
@@ -388,6 +388,7 @@ public:
                 link = it->second;
             if (!link)
                 continue;
+            int fail_num = 0;
             int want_len = packet->mLen;
             int gone_len = 0;
             while (want_len > 0)
@@ -405,8 +406,17 @@ public:
                 {
                     printf("Sent failed Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d]\n", 
                         link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n);
-                    DelLink(link);
-                    break;
+                    if (fail_num++ < 3)
+                    {
+                        printf("Sent failed Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d], fail_num[%d]\n", 
+                            link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n, fail_num);
+                        usleep(1);
+                    }
+                    else
+                    {
+                        DelLink(link);
+                        break;
+                    }
                 }
             }
             delete packet;
@@ -436,9 +446,14 @@ public:
     }
     int DelLink(Link *link)
     {
-        close(link->mFd);
-        int result = epoll_ctl(mEpollFd, EPOLL_CTL_DEL, link->mFd, NULL);
+        int result = epoll_ctl(mEpollFd, EPOLL_CTL_DEL, link->mFd, NULL);//TODO 删除失败情况
+        std::string key = SocketUtil::MakeKeyByIpPort(link->mIp, link->mPort);
+        auto it = mIpPortLink.find(key);
+        if (it != mIpPortLink.end())
+            mIpPortLink.erase(it);
         std::cout << "DelLink mFd=" << std::to_string(link->mFd) << ", result=" << std::to_string(result) << std::endl;
+        close(link->mFd);
+        delete link;
         return result;
     }
     int ModLink(Link *link, bool isWrite)

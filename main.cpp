@@ -14,10 +14,11 @@ int main()
     client->Start();
 
     usleep(1000000);
-    for (int i = 0; i < 1000000; ++i)
+    for (int i = 0; i < 10000000; ++i)
     {
-		std::string data = "hellohellohellohellohellohellohellohellohellohellohellohellohellohellohello";
+		std::string data = "hellohellohellohellohellohellohellohellohellohellohellohellohellohellohellohelloh";
 		client->Send("172.17.0.3", 11111, (char*)data.data(), data.size(), 0);
+		//usleep(1);
     }
 
     while(true)
