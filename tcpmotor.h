@@ -75,6 +75,20 @@ public:
 class SocketUtil
 {
 public:
+    static bool GetHostInfo(std::string& hostName, std::string& Ip) {
+        char name[256];
+        gethostname(name, sizeof(name));
+        hostName = name;
+        struct hostent* host = gethostbyname(name);
+        char ipStr[32];
+        const char* ret = inet_ntop(host->h_addrtype, host->h_addr_list[0], ipStr, sizeof(ipStr));
+        if (NULL == ret) {
+            std::cout << "hostname transform to ip failed" << std::endl;
+            return false;
+        }
+        Ip = ipStr;
+        return true;
+    }
     static std::string MakeKeyByIpPort(const std::string &ip, int port)
     {
         return ip + ":" + std::to_string(port);
@@ -84,14 +98,13 @@ public:
         int sfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         if(sfd == INVALID_SOCKET)
         {
-            printf("invalid socket !");
+            std::cout << "invalid socket !" << std::endl;
             return sfd;
         }
         //绑定端口 
         sockaddr_in serverAddr;
         serverAddr.sin_family = AF_INET;
-        //serverAddr.sin_addr.s_addr = inet_addr(ip);
-        serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+        serverAddr.sin_addr.s_addr = inet_addr(ip.c_str());
         serverAddr.sin_port = htons(port);
         //绑定  
         int iErrorMsg = bind(sfd, (sockaddr*)&serverAddr, sizeof(serverAddr));  
@@ -266,7 +279,10 @@ public:
     {
         mIsRunning      = true;
         Link *link      = new AcceptLink();
-        link->mFd       = SocketUtil::CreateBindListen("", mPort, false);
+        std::string hostname;
+        std::string localip;
+        SocketUtil::GetHostInfo(hostname, localip);
+        link->mFd       = SocketUtil::CreateBindListen(localip, mPort, false);
         link->mMotor    = this;
         AddLink(link);
         Loop();
@@ -348,7 +364,7 @@ private:
     //
     std::thread             mThread;
     //
-    moodycamel::ConcurrentQueue<packet*> mRecvQueue;
+    //moodycamel::ConcurrentQueue<packet*> mRecvQueue;
     moodycamel::ConcurrentQueue<packet*> mSendQueue;
 };
 
