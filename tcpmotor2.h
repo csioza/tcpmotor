@@ -28,6 +28,7 @@
 
 namespace dcore {
 
+#define TRIGGER_NUM         4
 #define MAX_RECBUFF_SIZE    8192
 #define MAX_PACKET_SIZE     8192
 #define INVALID             -1 
@@ -88,6 +89,10 @@ std::string RandomString(int len)
     std::string result = c;
     return result;
 }
+int GetMod(std::string key, int mod)
+{
+    return key[key.size() - 1] % mod;
+}
 ///////////////////////////////////////////////////////////////////////////////
 //handler class
 ///////////////////////////////////////////////////////////////////////////////
@@ -101,7 +106,7 @@ public:
     {
     }
     ~TcpRecvHandler() {}
-    virtual void OnRecv(std::string callback_ip, int callback_port, char* content, int contentLen) 
+    virtual void OnRecv(std::string callback_ip, int callback_port, const char* content, int contentLen) 
     {
         static int64 last = TimeUtil::NowTimeUs();
         std::string data(content, content + contentLen);
@@ -195,8 +200,7 @@ public:
 class SendPacket
 {
 public:
-    SendPacket(std::string ip, int port, void* data, int len, void* ctx)
-            : mIp(ip), mPort(port), mCtx(ctx)
+    SendPacket(std::string ip, int port, void* data, int len, void* ctx) : mIp(ip), mPort(port), mCtx(ctx)
     {
         mLen            = len + sizeof(Packet);
         mData           = (char *)malloc(mLen);
@@ -369,10 +373,11 @@ public:
 //main class
 ///////////////////////////////////////////////////////////////////////////////
 class TcpMotor;
+class Trigger;
 class Link
 {
 public:
-    Link() : mFd(0), mHead(0), mEnd(0), mMotor(nullptr)
+    Link() : mFd(0), mHead(0), mEnd(0), mTrigger(nullptr), mMotor(nullptr)
     {
         memset(mBuff, 0, MAX_RECBUFF_SIZE);
     }
@@ -385,6 +390,7 @@ public:
     char        mBuff[MAX_RECBUFF_SIZE];
     std::string mIp;//远端ip
     int         mPort;//远端port
+    Trigger*    mTrigger;
     TcpMotor*   mMotor;
 };
 
@@ -404,30 +410,23 @@ public:
     virtual void OnRecv();
 };
 
-class TcpMotor
+class Trigger
 {
 public:
-    TcpMotor(int port) : mPort(port), mIsRunning(false)
+    Trigger(TcpMotor *motor) : mMotor(motor), mIsRunning(false)
     {
         mEpollFd        = epoll_create(256);
         mEvents         = (struct epoll_event *)malloc(sizeof(struct epoll_event) * MAX_EVENT_NUM);
     }
-    ~TcpMotor()
+    virtual ~Trigger() 
     {
         delete mEvents;
     }
     void Run()
     {
-        mIsRunning      = true;
-        Link *link      = new AcceptLink();
-        std::string hostname;
-        std::string localip;
-        SocketUtil::GetHostInfo(hostname, localip);
-        link->mFd       = SocketUtil::CreateBindListen(localip, mPort, false);
-        link->mMotor    = this;
-        AddLink(link);
-        std::cout << "TcpMotor running!" << std::endl;
-        mThread = std::thread(&TcpMotor::Loop, this);
+        mIsRunning  = true;
+        std::cout << "Trigger running!" << std::endl;
+        mThread     = std::thread(&Trigger::Loop, this);
     }
     void Stop()
     {
@@ -440,6 +439,7 @@ public:
     {
         while (mIsRunning)
         {
+            AcceptHandler();
             int cnt = Wait(0);
             for (int i = 0; i < cnt; ++i)
             {
@@ -454,11 +454,30 @@ public:
             SendHandler(cnt);
         }
     }
-    void SetRecvHandler(TcpRecvHandler* recv) { mRecvHandler = recv; }
-    void SetSendHandler(TcpSendHandler* send) { mSendHandler = send; }
-    void RecvHandler(std::string callback_ip, int callback_port, void* content, int contentLen)
+    int PutLink(Link *link)
     {
-        mRecvHandler->OnRecv(callback_ip, callback_port, (char *)content, contentLen); 
+        bool r = mLinkQueue.enqueue(link);
+        if (!r)
+        {
+            std::cout << "PutLink failed!" << std::endl;
+            delete link;
+        }
+    }
+    int PutPacket(SendPacket *packet)
+    {
+        bool r = mSendQueue.enqueue(packet);
+        if (!r)
+        {
+            std::cout << "PutPacket failed!" << std::endl;
+            delete packet;
+        }
+    }
+    void AcceptHandler()
+    {
+        Link *link = nullptr;
+        for (int i = 0; i < MAX_EVENT_NUM && mLinkQueue.try_dequeue(link); ++i)
+            if (link)
+                AddLink(link);
     }
     void SendHandler(int num)
     {
@@ -480,7 +499,7 @@ public:
                 link->mFd           = sfd;
                 link->mIp           = packet->mIp;
                 link->mPort         = packet->mPort;
-                link->mMotor        = this;
+                link->mTrigger      = this;
                 mIpPortLink[key]    = link;
                 AddLink(link);
             }
@@ -522,11 +541,6 @@ public:
             delete packet;
         }
     }
-    void Send(std::string ip, int port, void* data, int len, void* ctx)
-    {
-        SendPacket *packet = new SendPacket(ip, port, data, len, ctx);
-        bool r = mSendQueue.enqueue(packet);
-    }
     int AddLink(Link *link)
     {
         std::string key = SocketUtil::MakeKeyByIpPort(link->mIp, link->mPort);
@@ -566,20 +580,107 @@ public:
     {
         return epoll_wait(mEpollFd, mEvents, MAX_EVENT_NUM, timeout);
     }
+    //
+    bool                    mIsRunning;
+    int                     mEpollFd;
+    struct epoll_event      *mEvents;
+    std::thread             mThread;
+    TcpMotor*               mMotor;
+    std::unordered_map<std::string, Link *>   mIpPortLink;//key: ip:port
+    moodycamel::ConcurrentQueue<SendPacket *> mSendQueue;
+    moodycamel::ConcurrentQueue<Link *>       mLinkQueue;
+};
+
+class TcpMotor
+{
+public:
+    TcpMotor(int port) : mPort(port), mIsRunning(false) 
+    {
+        for (int i = 0; i < TRIGGER_NUM; ++i)
+        {
+            mTriggers[i] = new Trigger(this);
+        }
+    }
+    ~TcpMotor()
+    {
+        for (int i = 0; i < TRIGGER_NUM; ++i)
+        {
+            delete mTriggers[i];
+        }
+    }
+    void Run()
+    {
+        mIsRunning      = true;
+        Link *link      = new AcceptLink();
+        link->mMotor    = this;
+        std::string hostname;
+        std::string localip;
+        SocketUtil::GetHostInfo(hostname, localip);
+        link->mFd       = SocketUtil::CreateBindListen(localip, mPort, false);
+        for (int i = 0; i < TRIGGER_NUM; ++i)
+            mTriggers[i]->Run();
+        link->mTrigger  = mTriggers[GetMod(localip, TRIGGER_NUM)];
+        link->mTrigger->PutLink(link);
+        std::cout << "TcpMotor running!" << std::endl;
+        mThread = std::thread(&TcpMotor::Loop, this);
+    }
+    void Stop()
+    {
+        mIsRunning = false;
+        if (mThread.joinable()) {
+            mThread.join();
+        }
+    }
+    void Loop()
+    {
+        while (mIsRunning)
+        {
+            RecvHandler();
+        }
+    }
+    int ExternAddLink(Link *link)
+    {
+        int n = GetMod(link->mIp, TRIGGER_NUM);
+        link->mTrigger  = mTriggers[n];
+        link->mMotor    = this;
+        link->mTrigger->PutLink(link);
+        std::cout << "ExternAddLink mFd=" << std::to_string(link->mFd) << ", n=" << std::to_string(n) << std::endl;
+        return 0;
+    }
+    void SetRecvHandler(TcpRecvHandler* recv) { mRecvHandler = recv; }
+    void SetSendHandler(TcpSendHandler* send) { mSendHandler = send; }
+
+    void RecvHandler()
+    {
+        RecvPacket *packet = nullptr;
+        bool result = mRecvQueue.try_dequeue(packet);
+        if (result && packet)
+            mRecvHandler->OnRecv(packet->mIp, packet->mPort, packet->mData.c_str(), packet->mData.size());
+        else
+            usleep(1);
+    }
+    void PutPacketHandler(std::string ip, int port, void* data, int len)
+    {
+        RecvPacket *packet = new RecvPacket(ip, port, (char *)data, len);
+        bool result = mRecvQueue.enqueue(packet);
+        if (!result || !packet)
+            delete packet;
+    }
+    void Send(std::string ip, int port, void* data, int len, void* ctx)
+    {
+        SendPacket *packet = new SendPacket(ip, port, data, len, ctx);
+        mTriggers[GetMod(ip, TRIGGER_NUM)]->PutPacket(packet);
+    }
 private:
     int                     mPort;
     bool                    mIsRunning;
+    Trigger*                mTriggers[TRIGGER_NUM];
     TcpRecvHandler*         mRecvHandler;
     TcpSendHandler*         mSendHandler;
-    std::unordered_map<std::string, Link*> mIpPortLink;//key: ip:port
-    //
-    int                     mEpollFd;
-    struct epoll_event      *mEvents;
     //
     std::thread             mThread;
     //
-    //moodycamel::ConcurrentQueue<Packet*> mRecvQueue;
-    moodycamel::ConcurrentQueue<SendPacket*> mSendQueue;
+    moodycamel::ConcurrentQueue<RecvPacket *>   mRecvQueue;
 };
 void SocketLink::OnRecv()
 {
@@ -623,7 +724,7 @@ void SocketLink::OnRecv()
                         else
                         {
                             // 消费
-                            mMotor->RecvHandler(mIp, mPort, (void *)packet->data, packet->len - sizeof(Packet));
+                            mMotor->PutPacketHandler(mIp, mPort, (void *)packet->data, packet->len - sizeof(Packet));
                             mHead += packet->len;
                         }
                     }
@@ -666,7 +767,7 @@ void SocketLink::OnRecv()
             break;
         else if (done == 2)
         {
-            mMotor->DelLink(this);
+            mTrigger->DelLink(this);
             break;
         }
     }
@@ -698,7 +799,7 @@ void AcceptLink::OnRecv()
         new_link->mMotor    = mMotor;
         new_link->mIp       = ip;
         new_link->mPort     = atoi(port);
-        mMotor->AddLink(new_link);
+        mMotor->ExternAddLink(new_link);
     }
 }
 
