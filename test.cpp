@@ -26,7 +26,7 @@ int main()
             std::string data = std::to_string(dcore::TimeUtil::NowTimeUs()) + tail;
             client[j]->Send(localip, 11111, (char*)data.data(), data.size(), 0);
         }
-        usleep(100);
+        usleep(200);
     }
 
     while(true)
