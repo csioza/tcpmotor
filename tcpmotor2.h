@@ -141,7 +141,7 @@ public:
         else
             ms100X++;
         sumSub += sub;
-        if (sumCount != 0 && sumCount % 1000 == 0)
+        if (sumCount != 0 && sumCount % 10000 == 0)
         {
             average = sumSub / sumCount;
             int64 qps = sumCount * 1000000 / (now - last);
@@ -450,8 +450,9 @@ public:
                         link->OnRecv();
                 }
             }
-            cnt = cnt > 0 ? cnt + 1 : 1;
-            SendHandler(cnt);
+            cnt  = cnt > 0 ? cnt : 0;
+            cnt += SendHandler(cnt + 1);
+            cnt > 0 ? usleep(cnt) : usleep(10);
         }
     }
     int PutLink(Link *link)
@@ -477,23 +478,24 @@ public:
         Link *link = nullptr;
         for (int i = 0; i < MAX_EVENT_NUM && mLinkQueue.try_dequeue(link); ++i)
             if (link)
-                AddLink(link);
+                AddLink(link, false);
     }
-    void SendHandler(int num)
+    int SendHandler(int num)
     {
+        int send_num = 0;
         for (int i = 0; i < num; ++i)
         {
             SendPacket *packet = nullptr;
             bool result = mSendQueue.try_dequeue(packet);
             if (!result || !packet)
-                return;
+                return send_num;
             std::string key = SocketUtil::MakeKeyByIpPort(packet->mIp, packet->mPort);
             Link *link = nullptr;
             auto it = mIpPortLink.find(key);
             if (it == mIpPortLink.end())
             {
                 int sfd = SocketUtil::Connect(packet->mIp, packet->mPort);
-                if (sfd < 0)
+                if (sfd < 0 || SocketUtil::Nonblock(sfd) != 0 || SocketUtil::Setsockopt(sfd) != 0)
                     continue;
                 link                = new SocketLink();
                 link->mFd           = sfd;
@@ -501,7 +503,7 @@ public:
                 link->mPort         = packet->mPort;
                 link->mTrigger      = this;
                 mIpPortLink[key]    = link;
-                AddLink(link);
+                AddLink(link, true);
             }
             else
                 link = it->second;
@@ -529,7 +531,7 @@ public:
                     {
                         printf("Sent failed Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d], fail_num[%d]\n", 
                             link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n, fail_num);
-                        usleep(1);
+                        usleep(10);
                     }
                     else
                     {
@@ -538,15 +540,20 @@ public:
                     }
                 }
             }
+            ++send_num;
             delete packet;
         }
+        return send_num;
     }
-    int AddLink(Link *link)
+    int AddLink(Link *link, bool isForce)
     {
-        std::string key = SocketUtil::MakeKeyByIpPort(link->mIp, link->mPort);
-        auto it = mIpPortLink.find(key);
-        if (it == mIpPortLink.end())
-            mIpPortLink[key] = link;
+        if (!isForce)
+        {
+            std::string key = SocketUtil::MakeKeyByIpPort(link->mIp, link->mPort);
+            auto it = mIpPortLink.find(key);
+            if (it == mIpPortLink.end())
+                mIpPortLink[key] = link;
+        }
         struct epoll_event event;
         event.events    = EPOLLIN | EPOLLET;
         event.data.fd   = link->mFd;

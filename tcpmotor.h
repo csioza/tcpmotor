@@ -28,10 +28,10 @@
 
 namespace dcore {
 
-#define MAX_RECBUFF_SIZE    8192
 #define MAX_PACKET_SIZE     8192
+#define MAX_RECBUFF_SIZE    (MAX_PACKET_SIZE * 3)
 #define INVALID             -1 
-#define MAX_EVENT_NUM       256
+#define MAX_EVENT_NUM       1024
 #define INVALID_SOCKET      -1
 
 typedef char                int8;
@@ -136,12 +136,12 @@ public:
         else
             ms100X++;
         sumSub += sub;
-        if (sumCount != 0 && sumCount % 1000 == 0)
+        if (sumCount != 0 && sumCount % 10000 == 0)
         {
             average = sumSub / sumCount;
             int64 qps = sumCount * 1000000 / (now - last);
-            printf("TcpRecvHandler::OnRecv from ip[%s], port[%d], content[], contentLen[%d],\n qps      [%ld]\n us0_499  [%ld]\n us500_999[%ld]\n ms1_9    [%ld]\n ms10_19  [%ld]\n ms20_29  [%ld]\n ms30_39  [%ld]\n ms40_49  [%ld]\n ms50_59  [%ld]\n ms60_69  [%ld]\n ms70_79  [%ld]\n ms80_89  [%ld]\n ms90_99  [%ld]\n ms100X   [%ld]\n average  [%ld]\n sumCount [%ld]\n" ,
-                callback_ip.c_str(), callback_port, /*data.c_str(), */contentLen, qps,
+            printf("contentLen[%d],\n qps      [%ld]\n us0_499  [%ld]\n us500_999[%ld]\n ms1_9    [%ld]\n ms10_19  [%ld]\n ms20_29  [%ld]\n ms30_39  [%ld]\n ms40_49  [%ld]\n ms50_59  [%ld]\n ms60_69  [%ld]\n ms70_79  [%ld]\n ms80_89  [%ld]\n ms90_99  [%ld]\n ms100X   [%ld]\n average  [%ld]\n sumCount [%ld]\n" ,
+                /*data.c_str(), */contentLen, qps,
                 us0_499, us500_999, ms1_9, ms10_19, ms20_29, ms30_39, ms40_49,ms50_59, ms60_69, ms70_79, ms80_89, ms90_99, ms100X,
                 average, sumCount);
 
@@ -195,8 +195,7 @@ public:
 class SendPacket
 {
 public:
-    SendPacket(std::string ip, int port, void* data, int len, void* ctx)
-            : mIp(ip), mPort(port), mCtx(ctx)
+    SendPacket(std::string ip, int port, void* data, int len, void* ctx) : mIp(ip), mPort(port), mCtx(ctx)
     {
         mLen            = len + sizeof(Packet);
         mData           = (char *)malloc(mLen);
@@ -325,14 +324,14 @@ public:
     }
     static int Setsockopt(int sfd)
     {
-        int rcvBuff = 52428800;//512mk
+        int rcvBuff = 524288;//512k
         if (0 != setsockopt(sfd, SOL_SOCKET, SO_RCVBUF, (const char *)&rcvBuff, sizeof(rcvBuff)))
         {
             printf("set rcvBuff failed!\n");
             close(sfd);
             return INVALID;
         }
-        int sndBuff = 52428800;//512k
+        int sndBuff = 524288;//512k
         if (0 != setsockopt(sfd, SOL_SOCKET, SO_SNDBUF, (const char *)&sndBuff, sizeof(sndBuff)))
         {
             printf("set sndBuff failed!\n");
@@ -425,7 +424,7 @@ public:
         SocketUtil::GetHostInfo(hostname, localip);
         link->mFd       = SocketUtil::CreateBindListen(localip, mPort, false);
         link->mMotor    = this;
-        AddLink(link);
+        AddLink(link, false);
         std::cout << "TcpMotor running!" << std::endl;
         mThread = std::thread(&TcpMotor::Loop, this);
     }
@@ -450,8 +449,11 @@ public:
                         link->OnRecv();
                 }
             }
-            cnt = cnt > 0 ? cnt + 1 : 1;
-            SendHandler(cnt);
+            cnt  = cnt > 0 ? cnt : 0;
+            cnt += SendHandler(cnt + 1);
+            if (cnt > 0) usleep(1);
+            //cnt > 0 ? usleep(1) : usleep(10);
+            //usleep(2);
         }
     }
     void SetRecvHandler(TcpRecvHandler* recv) { mRecvHandler = recv; }
@@ -460,21 +462,22 @@ public:
     {
         mRecvHandler->OnRecv(callback_ip, callback_port, (char *)content, contentLen); 
     }
-    void SendHandler(int num)
+    int SendHandler(int num)
     {
+        int send_num = 0;
         for (int i = 0; i < num; ++i)
         {
             SendPacket *packet = nullptr;
             bool result = mSendQueue.try_dequeue(packet);
             if (!result || !packet)
-                return;
+                return send_num;
             std::string key = SocketUtil::MakeKeyByIpPort(packet->mIp, packet->mPort);
             Link *link = nullptr;
             auto it = mIpPortLink.find(key);
             if (it == mIpPortLink.end())
             {
                 int sfd = SocketUtil::Connect(packet->mIp, packet->mPort);
-                if (sfd < 0)
+                if (sfd < 0 || SocketUtil::Nonblock(sfd) != 0 || SocketUtil::Setsockopt(sfd) != 0)
                     continue;
                 link                = new SocketLink();
                 link->mFd           = sfd;
@@ -482,7 +485,7 @@ public:
                 link->mPort         = packet->mPort;
                 link->mMotor        = this;
                 mIpPortLink[key]    = link;
-                AddLink(link);
+                AddLink(link, true);
             }
             else
                 link = it->second;
@@ -498,18 +501,18 @@ public:
                 {
                     gone_len += n;
                     want_len -= n;
-                    if (want_len > 0)
-                        printf("Sent Half Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d]\n", 
-                            link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n);
+                    //if (want_len > 0)
+                        //printf("Sent Half Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d]\n", 
+                        //    link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n);
                 }
                 else
                 {
-                    printf("Sent failed Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d]\n", 
-                        link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n);
+                    //printf("Sent failed Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d]\n", 
+                    //    link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n);
                     if (fail_num++ < 3)
                     {
-                        printf("Sent failed Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d], fail_num[%d]\n", 
-                            link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n, fail_num);
+                        //printf("Sent failed Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d], fail_num[%d]\n", 
+                        //    link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n, fail_num);
                         usleep(1);
                     }
                     else
@@ -519,20 +522,25 @@ public:
                     }
                 }
             }
+            ++send_num;
             delete packet;
         }
+        return send_num;
     }
     void Send(std::string ip, int port, void* data, int len, void* ctx)
     {
         SendPacket *packet = new SendPacket(ip, port, data, len, ctx);
         bool r = mSendQueue.enqueue(packet);
     }
-    int AddLink(Link *link)
+    int AddLink(Link *link, bool isForce)
     {
-        std::string key = SocketUtil::MakeKeyByIpPort(link->mIp, link->mPort);
-        auto it = mIpPortLink.find(key);
-        if (it == mIpPortLink.end())
-            mIpPortLink[key] = link;
+        if (!isForce)
+        {
+            std::string key = SocketUtil::MakeKeyByIpPort(link->mIp, link->mPort);
+            auto it = mIpPortLink.find(key);
+            if (it == mIpPortLink.end())
+                mIpPortLink[key] = link;
+        }
         struct epoll_event event;
         event.events    = EPOLLIN | EPOLLET;
         event.data.fd   = link->mFd;
@@ -698,7 +706,7 @@ void AcceptLink::OnRecv()
         new_link->mMotor    = mMotor;
         new_link->mIp       = ip;
         new_link->mPort     = atoi(port);
-        mMotor->AddLink(new_link);
+        mMotor->AddLink(new_link, false);
     }
 }
 

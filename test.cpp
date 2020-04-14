@@ -1,6 +1,5 @@
 #include "tcpmotor.h"
 
-//server
 int main()
 {
     dcore::TcpMotor *server = new dcore::TcpMotor(11111);
@@ -16,16 +15,18 @@ int main()
         client[i]->Run();
     }
 
-    usleep(1000000);
-    std::string tail = dcore::RandomString(100);
+    std::string hostname;
+    std::string localip;
+    dcore::SocketUtil::GetHostInfo(hostname, localip);
+    std::string tail = dcore::RandomString(1000);
     for (int i = 0; i < 10000000; ++i)
     {
         for (int j = 0; j < max; ++j)
         {
             std::string data = std::to_string(dcore::TimeUtil::NowTimeUs()) + tail;
-            client[j]->Send("172.17.0.3", 11111, (char*)data.data(), data.size(), 0);
+            client[j]->Send(localip, 11111, (char*)data.data(), data.size(), 0);
         }
-		usleep(1000);
+        usleep(100);
     }
 
     while(true)
