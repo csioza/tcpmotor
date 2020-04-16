@@ -23,6 +23,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <sys/time.h>
+#include <signal.h>
 //
 #include "concurrentqueue.h"
 
@@ -95,9 +96,9 @@ class TcpRecvHandler
 {
 public:
     TcpRecvHandler() : sumCount(0), us0_499(0), us500_999(0),
-            ms10_19(0), ms20_29(0), ms30_39(0), ms40_49(0),
-            ms50_59(0), ms60_69(0), ms70_79(0), ms80_89(0),
-            ms90_99(0), ms100X(0), sumSub(0), average(0)
+            ms10_19(0), ms20_29(0), ms30_39(0), ms40_49(0), ms50_59(0), ms60_69(0), ms70_79(0), ms80_89(0), ms90_99(0), 
+            ms100_199(0), ms200_299(0), ms300_399(0), ms400_499(0), ms500_599(0), ms600_699(0), ms700_799(0), ms800_899(0), ms900_999(0), 
+            ms1000X(0), sumSub(0), average(0)
     {
     }
     ~TcpRecvHandler() {}
@@ -133,16 +134,36 @@ public:
             ms80_89++;
         else if (sub < 100000)
             ms90_99++;
+        else if (sub < 200000)
+            ms100_199++;
+        else if (sub < 300000)
+            ms200_299++;
+        else if (sub < 400000)
+            ms300_399++;
+        else if (sub < 500000)
+            ms400_499++;
+        else if (sub < 600000)
+            ms500_599++;
+        else if (sub < 700000)
+            ms600_699++;
+        else if (sub < 800000)
+            ms700_799++;
+        else if (sub < 900000)
+            ms800_899++;
+        else if (sub < 1000000)
+            ms900_999++;
         else
-            ms100X++;
+            ms1000X++;
         sumSub += sub;
-        if (sumCount != 0 && sumCount % 10000 == 0)
+        if (sumCount != 0 && sumCount % 100000 == 0)
         {
             average = sumSub / sumCount;
             int64 qps = sumCount * 1000000 / (now - last);
-            printf("contentLen[%d],\n qps      [%ld]\n us0_499  [%ld]\n us500_999[%ld]\n ms1_9    [%ld]\n ms10_19  [%ld]\n ms20_29  [%ld]\n ms30_39  [%ld]\n ms40_49  [%ld]\n ms50_59  [%ld]\n ms60_69  [%ld]\n ms70_79  [%ld]\n ms80_89  [%ld]\n ms90_99  [%ld]\n ms100X   [%ld]\n average  [%ld]\n sumCount [%ld]\n" ,
+
+            printf("msg_len     [%ld]\nqps         [%ld]\nus0_499     [%ld]\nus500_999   [%ld]\nms1_9       [%ld]\nms10_19     [%ld]\nms20_29     [%ld]\nms30_39     [%ld]\nms40_49     [%ld]\nms50_59     [%ld]\nms60_69     [%ld]\nms70_79     [%ld]\nms80_89     [%ld]\nms90_99     [%ld]\nms100_199   [%ld]\nms200_299   [%ld]\nms300_399   [%ld]\nms400_499   [%ld]\nms500_599   [%ld]\nms600_699   [%ld]\nms700_799   [%ld]\nms800_899   [%ld]\nms900_999   [%ld]\nms1000X     [%ld]\naverage     [%ld]\nsumCount    [%ld]\n" ,
                 /*data.c_str(), */contentLen, qps,
-                us0_499, us500_999, ms1_9, ms10_19, ms20_29, ms30_39, ms40_49,ms50_59, ms60_69, ms70_79, ms80_89, ms90_99, ms100X,
+                us0_499, us500_999, ms1_9, ms10_19, ms20_29, ms30_39, ms40_49,ms50_59, ms60_69, ms70_79, ms80_89, ms90_99, 
+                ms100_199, ms200_299, ms300_399, ms400_499, ms500_599, ms600_699, ms700_799, ms800_899, ms900_999, ms1000X,
                 average, sumCount);
 
         }
@@ -162,7 +183,16 @@ public:
     int64 ms70_79;
     int64 ms80_89;
     int64 ms90_99;
-    int64 ms100X;
+    int64 ms100_199;
+    int64 ms200_299;
+    int64 ms300_399;
+    int64 ms400_499;
+    int64 ms500_599;
+    int64 ms600_699;
+    int64 ms700_799;
+    int64 ms800_899;
+    int64 ms900_999;
+    int64 ms1000X;
     int64 sumSub;
     int64 average;
 };
@@ -303,10 +333,10 @@ public:
             printf("nonblock error !\n");
             return -3;
         }
-        printf("connected to server(ip=%s, port=%d, fd=%d)\n", ip.c_str(), port, sfd);
+        //printf("connected to server(ip=%s, port=%d, fd=%d)\n", ip.c_str(), port, sfd);
         return sfd;
     }
-    static int CreateBindListen(const std::string &ip, int port, bool isBlock/* = false*/)
+    static int CreateBindListen(const std::string &ip, int port, bool isBlock)
     {
         int sfd = CreateBind(ip, port);
         if (!isBlock && Nonblock(sfd) == INVALID)
@@ -324,7 +354,7 @@ public:
     }
     static int Setsockopt(int sfd)
     {
-        int rcvBuff = 524288;//512k
+        int rcvBuff = 524288;//512k 设置0表示不经历由系统缓冲区到socket缓冲区的拷贝而影响，本程序实验证明为0时发送超过1024B会有大量发送失败的情况
         if (0 != setsockopt(sfd, SOL_SOCKET, SO_RCVBUF, (const char *)&rcvBuff, sizeof(rcvBuff)))
         {
             printf("set rcvBuff failed!\n");
@@ -354,12 +384,6 @@ public:
             close(sfd);
             return INVALID;
         }
-        //如果在发送数据的时，希望不经历由系统缓冲区到socket缓冲区的拷贝而影响 
-        int nZero = 0;
-        setsockopt(sfd, SOL_SOCKET, SO_SNDBUF, (char *)&nZero, sizeof(nZero));
-        //同上在recv()完成上述功能(默认情况是将socket缓冲区的内容拷贝到系统缓冲区) 
-        nZero = 0;
-        setsockopt(sfd, SOL_SOCKET, SO_RCVBUF, (char *)&nZero, sizeof(nZero));
         return 0;
     }
     
@@ -376,12 +400,13 @@ public:
         memset(mBuff, 0, MAX_RECBUFF_SIZE);
     }
     virtual ~Link() {}
-    virtual void OnRecv() {}
+    virtual int OnRecv() {}
     //   
     int         mFd;
     int         mHead;
     int         mEnd;
     char        mBuff[MAX_RECBUFF_SIZE];
+    int64       mLastActiveTime;
     std::string mIp;//远端ip
     int         mPort;//远端port
     TcpMotor*   mMotor;
@@ -392,7 +417,7 @@ class SocketLink : public Link
 public:
     SocketLink() {}
     virtual ~SocketLink() {}
-    virtual void OnRecv();
+    virtual int OnRecv();
 };
 
 class AcceptLink : public Link
@@ -400,20 +425,25 @@ class AcceptLink : public Link
 public:
     AcceptLink() {}
     virtual ~AcceptLink() {}
-    virtual void OnRecv();
+    virtual int OnRecv();
 };
 
 class TcpMotor
 {
 public:
-    TcpMotor(int port) : mPort(port), mIsRunning(false)
+    TcpMotor(int port) : mPort(port), mIsRunning(false), mRecvHandler(nullptr), mSendHandler(nullptr)
     {
         mEpollFd        = epoll_create(256);
-        mEvents         = (struct epoll_event *)malloc(sizeof(struct epoll_event) * MAX_EVENT_NUM);
+        mEvents         = new struct epoll_event[MAX_EVENT_NUM];//(struct epoll_event *)malloc(sizeof(struct epoll_event) * MAX_EVENT_NUM);
     }
     ~TcpMotor()
     {
-        delete mEvents;
+        delete[] mEvents;
+        close(mEpollFd);
+        if (mRecvHandler)
+            delete mRecvHandler;
+        if (mSendHandler)
+            delete mSendHandler;
     }
     void Run()
     {
@@ -427,13 +457,15 @@ public:
         AddLink(link, false);
         std::cout << "TcpMotor running!" << std::endl;
         mThread = std::thread(&TcpMotor::Loop, this);
+        pthread_setname_np(mThread.native_handle(), "TcpMotor-Loop");
     }
     void Stop()
     {
         mIsRunning = false;
-        if (mThread.joinable()) {
+        if (mThread.joinable())
             mThread.join();
-        }
+        for (auto it : mIpPortLink)
+            DelLink(it.second);
     }
     void Loop()
     {
@@ -445,14 +477,16 @@ public:
                 if (mEvents[i].events & EPOLLIN)
                 {
                     Link *link = (Link *)mEvents[i].data.ptr;
-                    if (link)
-                        link->OnRecv();
+                    if (!link)
+                        continue;
+                    if (link->OnRecv() != 0)
+                        DelLink(link);
                 }
             }
             cnt  = cnt > 0 ? cnt : 0;
             cnt += SendHandler(cnt + 1);
-            if (cnt > 0) usleep(1);
-            //cnt > 0 ? usleep(1) : usleep(10);
+            //if (cnt > 0) usleep(1);
+            cnt > 0 ? usleep(2) : usleep(1);
             //usleep(2);
         }
     }
@@ -477,7 +511,7 @@ public:
             if (it == mIpPortLink.end())
             {
                 int sfd = SocketUtil::Connect(packet->mIp, packet->mPort);
-                if (sfd < 0 || SocketUtil::Nonblock(sfd) != 0 || SocketUtil::Setsockopt(sfd) != 0)
+                if (sfd < 0 || SocketUtil::Setsockopt(sfd) != 0)
                     continue;
                 link                = new SocketLink();
                 link->mFd           = sfd;
@@ -546,7 +580,7 @@ public:
         event.data.fd   = link->mFd;
         event.data.ptr  = (void *)link;
         int result = epoll_ctl(mEpollFd, EPOLL_CTL_ADD, link->mFd, &event);
-        std::cout << "AddLink mFd=" << std::to_string(link->mFd) << ", result=" << std::to_string(result) << std::endl;
+        //std::cout << "AddLink mFd=" << std::to_string(link->mFd) << ", result=" << std::to_string(result) << std::endl;
         return result;
     }
     int DelLink(Link *link)
@@ -556,7 +590,7 @@ public:
         auto it = mIpPortLink.find(key);
         if (it != mIpPortLink.end())
             mIpPortLink.erase(it);
-        std::cout << "DelLink mFd=" << std::to_string(link->mFd) << ", result=" << std::to_string(result) << std::endl;
+        //std::cout << "DelLink mFd=" << std::to_string(link->mFd) << ", result=" << std::to_string(result) << std::endl;
         close(link->mFd);
         delete link;
         return result;
@@ -580,20 +614,17 @@ private:
     TcpRecvHandler*         mRecvHandler;
     TcpSendHandler*         mSendHandler;
     std::unordered_map<std::string, Link*> mIpPortLink;//key: ip:port
-    //
     int                     mEpollFd;
     struct epoll_event      *mEvents;
-    //
     std::thread             mThread;
-    //
-    //moodycamel::ConcurrentQueue<Packet*> mRecvQueue;
     moodycamel::ConcurrentQueue<SendPacket*> mSendQueue;
 };
-void SocketLink::OnRecv()
+int SocketLink::OnRecv()
 {
-    int done = 0;
+    int result = 0;
     while (1)
     {
+        int done  = 0;
         int count = recv(mFd, mBuff + mEnd, MAX_RECBUFF_SIZE - mEnd, 0);
         if (count == -1)
         {
@@ -602,6 +633,7 @@ void SocketLink::OnRecv()
             else
             {
                 printf("err recv count:%d errno:%d\n",count,errno);
+                //printf("SocketLink::OnRecv fail 22222222 mHead:%d mEnd:%d\n", mHead, mEnd);
                 done = 2;
             }
         }
@@ -616,9 +648,9 @@ void SocketLink::OnRecv()
                 if (mHead + sizeof(Packet) < MAX_RECBUFF_SIZE)
                 {
                     Packet *packet = (Packet *)(mBuff + mHead);
-                    if (packet && packet->len < MAX_PACKET_SIZE)
+                    if (packet && packet->len <= MAX_PACKET_SIZE)
                     {
-                        if (mHead + packet->len > mEnd) // 断包 
+                        if (mHead + packet->len > mEnd) //断包 
                         {
                             if (mHead + packet->len > MAX_RECBUFF_SIZE)
                             {
@@ -628,15 +660,15 @@ void SocketLink::OnRecv()
                             }
                             break;
                         }
-                        else
+                        else //消费
                         {
-                            // 消费
                             mMotor->RecvHandler(mIp, mPort, (void *)packet->data, packet->len - sizeof(Packet));
                             mHead += packet->len;
                         }
                     }
                     else //错误包 
                     {
+                        //printf("SocketLink::OnRecv fail packet->len:%d mHead:%d mEnd:%d\n", packet->len, mHead, mEnd);
                         mHead = 0;
                         mEnd  = 0;
                         done  = 2;
@@ -667,19 +699,24 @@ void SocketLink::OnRecv()
                 mEnd  = 0;
             }
             else
+            {
+                //printf("SocketLink::OnRecv fail 22222222 mHead:%d mEnd:%d\n", mHead, mEnd);
                 done = 2;
+            }
         }
         //
         if (done == 1)
             break;
         else if (done == 2)
         {
-            mMotor->DelLink(this);
+            //printf("SocketLink::OnRecv fail 11111111 mHead:%d mEnd:%d\n", mHead, mEnd);
+            result = 1;
             break;
         }
     }
+    return result;
 }
-void AcceptLink::OnRecv()
+int AcceptLink::OnRecv()
 {
     while (1)
     {
@@ -688,19 +725,19 @@ void AcceptLink::OnRecv()
         int socket_fd       = accept(mFd, (struct sockaddr *)&addr, &in_len);
         if (socket_fd == INVALID_SOCKET)
         {
-            printf("all have accepted\n");
+            //printf("all have accepted\n");
             break;
         }
         SocketUtil::Setsockopt(socket_fd);
         char ip[NI_MAXHOST], port[NI_MAXSERV];
         if (getnameinfo((struct sockaddr *)&addr, in_len, ip, sizeof ip, port, sizeof port, NI_NUMERICHOST | NI_NUMERICSERV) != 0)
         {
-            std::cout << "Accepted connection (ip=" << ip << ", port=" << port << ", socket_fd=" << std::to_string(socket_fd) << ")" << std::endl;
+            //std::cout << "Accepted connection (ip=" << ip << ", port=" << port << ", socket_fd=" << std::to_string(socket_fd) << ")" << std::endl;
             continue;
         }
         if (SocketUtil::Nonblock(socket_fd) < 0)
             continue;
-        std::cout << "Accepted connection (ip=" << ip << ", port=" << port << ", socket_fd=" << std::to_string(socket_fd) << ")" << std::endl;    
+        //std::cout << "Accepted connection (ip=" << ip << ", port=" << port << ", socket_fd=" << std::to_string(socket_fd) << ")" << std::endl;    
         Link *new_link      = new SocketLink();
         new_link->mFd       = socket_fd;
         new_link->mMotor    = mMotor;
@@ -708,6 +745,7 @@ void AcceptLink::OnRecv()
         new_link->mPort     = atoi(port);
         mMotor->AddLink(new_link, false);
     }
+    return 0;
 }
 
 } //namespace dcore
