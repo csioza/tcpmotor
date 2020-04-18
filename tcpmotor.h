@@ -109,9 +109,7 @@ public:
     TcpRecvHandler() : sumCount(0), us0_499(0), us500_999(0),
             ms10_19(0), ms20_29(0), ms30_39(0), ms40_49(0), ms50_59(0), ms60_69(0), ms70_79(0), ms80_89(0), ms90_99(0), 
             ms100_199(0), ms200_299(0), ms300_399(0), ms400_499(0), ms500_599(0), ms600_699(0), ms700_799(0), ms800_899(0), ms900_999(0), 
-            ms1000X(0), sumSub(0), average(0)
-    {
-    }
+            ms1000X(0), sumSub(0), average(0) {}
     ~TcpRecvHandler() {}
     virtual void OnRecv(std::string callback_ip, int callback_port, char* content, int contentLen) 
     {
@@ -260,14 +258,16 @@ public:
 class SocketUtil
 {
 public:
-    static bool GetHostInfo(std::string& hostName, std::string& Ip) {
+    static bool GetHostInfo(std::string& hostName, std::string& Ip) 
+    {
         char name[256];
         gethostname(name, sizeof(name));
         hostName = name;
         struct hostent* host = gethostbyname(name);
         char ipStr[32];
         const char* ret = inet_ntop(host->h_addrtype, host->h_addr_list[0], ipStr, sizeof(ipStr));
-        if (NULL == ret) {
+        if (NULL == ret) 
+        {
             std::cout << "hostname transform to ip failed\n" << std::endl;
             return false;
         }
@@ -554,7 +554,6 @@ private:
                 link->mPort         = packet->mPort;
                 link->mMotor        = this;
                 link->mKey          = key;
-                mIpPortLink[key]    = link;
                 AddLink(link);
             }
             else
@@ -601,7 +600,6 @@ private:
     int DelLink(Link *link)
     {
         int result = epoll_ctl(mEpollFd, EPOLL_CTL_DEL, link->mFd, NULL);//TODO 删除失败情况
-        //std::string key = SocketUtil::MakeKeyByIpPort(link->mIp, link->mPort);
         auto it = mIpPortLink.find(link->mKey);
         if (it != mIpPortLink.end())
             mIpPortLink.erase(it);
