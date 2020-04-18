@@ -1,151 +1,55 @@
-#TcpMotor
-a tcp transmit lib, single file, lock free, single thread
+# TcpMotor
+a tcp transmit lib, two files, lock free, two threads
 
-##TODO
-	1.多个epoll,增加triger
-	2.收队列，不阻塞
-	3.添加计时器，定时移除不活跃的link
-	4.内存检测
-##环境
-macos, i7,6核, 16gb, docker centos7 5核
-##测试数据
-	[稳定]
-	all_num[20000000], failed_num[116], succ_rate[999995]
-	msg_len     [2000]
-	qps         [66273]
-	us0_499     [18930865]
-	us500_999   [972929]
-	ms1_9       [25573]
-	ms10_19     [4723]
-	ms20_29     [3848]
-	ms30_39     [3299]
-	ms40_49     [2703]
-	ms50_59     [1987]
-	ms60_69     [1704]
-	ms70_79     [1646]
-	ms80_89     [1521]
-	ms90_99     [1325]
-	ms100_199   [9821]
-	ms200_299   [7588]
-	ms300_399   [5488]
-	ms400_499   [5391]
-	ms500_599   [4234]
-	ms600_699   [1867]
-	ms700_799   [1503]
-	ms800_899   [4019]
-	ms900_999   [4359]
-	ms1000X     [3607]
-	average     [1574]
-	sumCount    [20000000]
+	TODO:
 	
-	[稳定]
-	TcpRecvHandler::OnRecv from ip[172.17.0.3], port[53760], content[], contentLen[116],
-	 qps      [3631]
-	 us0_499  [197100]
-	 us500_999[488]
-	 ms1_9    [1925]
-	 ms10_19  [131]
-	 ms20_29  [118]
-	 ms30_39  [114]
-	 ms40_49  [116]
-	 ms50_59  [8]
-	 ms60_69  [0]
-	 ms70_79  [0]
-	 ms80_89  [0]
-	 ms90_99  [0]
-	 ms100X   [0]
-	 average  [158]
-	 sumCount [200000]
+	版本1
+	1.增加新线程用于剥离业务与TcpMotor线程，收队列，不阻塞TcpMotor(待定)
+	2.添加计时器，定时移除不活跃的link
+	
+	版本2
+	1.尝试多个epoll,开多个线程处理收发，增加triger
+	
+## 环境
 
-	[不稳定]
-	 TcpRecvHandler::OnRecv from ip[172.17.0.3], port[53784], content[], contentLen[216],
-	 qps      [3627]
-	 us0_499  [137631]
-	 us500_999[114]
-	 ms1_9    [254]
-	 ms10_19  [1]
-	 ms20_29  [0]
-	 ms30_39  [0]
-	 ms40_49  [0]
-	 ms50_59  [0]
-	 ms60_69  [0]
-	 ms70_79  [0]
-	 ms80_89  [0]
-	 ms90_99  [0]
-	 ms100X   [0]
-	 average  [63]
-	 sumCount [138000]
+	docker centos7 5cpu
 	
-	 [不稳定]
-	 TcpRecvHandler::OnRecv from ip[172.17.0.3], port[53814], content[], contentLen[316],
-	 qps      [2862]
-	 us0_499  [24776]
-	 us500_999[22]
-	 ms1_9    [52]
-	 ms10_19  [2]
-	 ms20_29  [0]
-	 ms30_39  [0]
-	 ms40_49  [0]
-	 ms50_59  [0]
-	 ms60_69  [0]
-	 ms70_79  [0]
-	 ms80_89  [0]
-	 ms90_99  [0]
-	 ms100X   [148]
-	 average  [12870]
-	 sumCount [25000]
+## 测试数据
 	
-	 TcpRecvHandler::OnRecv from ip[172.17.0.3], port[53840], content[], contentLen[1016],
-	 qps      [463]
-	 us0_499  [25772]
-	 us500_999[25]
-	 ms1_9    [43]
-	 ms10_19  [32]
-	 ms20_29  [44]
-	 ms30_39  [44]
-	 ms40_49  [32]
-	 ms50_59  [8]
-	 ms60_69  [0]
-	 ms70_79  [0]
-	 ms80_89  [0]
-	 ms90_99  [0]
-	 ms100X   [0]
-	 average  [296]
-	 sumCount [26000]
+	占用一个CPU 75～85%， 8万QPS， 平均延时3.5ms
 	
-	 TcpRecvHandler::OnRecv from ip[172.17.0.3], port[53896], content[], contentLen[1016],
-	 qps      [99]
-	 us0_499  [1576]
-	 us500_999[17]
-	 ms1_9    [1109]
-	 ms10_19  [1508]
-	 ms20_29  [482]
-	 ms30_39  [295]
-	 ms40_49  [13]
-	 ms50_59  [0]
-	 ms60_69  [0]
-	 ms70_79  [0]
-	 ms80_89  [0]
-	 ms90_99  [0]
-	 ms100X   [0]
-	 average  [10773]
-	 sumCount [5000]
+	all_num[36000000], failed_num[0], succ_rate[1000000]
+	msg_len     [1024]
+	qps         [84468]
+	us0_499     [7737727]
+	us500_999   [24535934]
+	ms1_9       [3391688]
+	ms10_19     [21809]
+	ms20_29     [12694]
+	ms30_39     [11945]
+	ms40_49     [10867]
+	ms50_59     [10455]
+	ms60_69     [9416]
+	ms70_79     [8981]
+	ms80_89     [8333]
+	ms90_99     [7125]
+	ms100_199   [58846]
+	ms200_299   [43349]
+	ms300_399   [35556]
+	ms400_499   [24363]
+	ms500_599   [16350]
+	ms600_699   [14669]
+	ms700_799   [12488]
+	ms800_899   [10335]
+	ms900_999   [7865]
+	ms1000X     [9205]
+	average     [3523]
+	sumCount    [36000000]
 	
-	all_num[10000000], failed_num[490], succ_rate[999951]
-	contentLen[1018]
-	 qps      [35165]
-	 us0_499  [9995918]
-	 us500_999[3993]
-	 ms1_9    [89]
-	 ms10_19  [0]
-	 ms20_29  [0]
-	 ms30_39  [0]
-	 ms40_49  [0]
-	 ms50_59  [0]
-	 ms60_69  [0]
-	 ms70_79  [0]
-	 ms80_89  [0]
-	 ms90_99  [0]
-	 ms100X   [0]
-	 average  [181]
-	 sumCount [10000000]
+## 内存检测
+
+	==00:00:00:17.467 666== HEAP SUMMARY:
+	==00:00:00:17.467 666==     in use at exit: 0 bytes in 0 blocks
+	==00:00:00:17.467 666==   total heap usage: 506,685 allocs, 506,685 frees, 345,307,952 bytes allocated
+	==00:00:00:17.467 666== 
+	==00:00:00:17.468 666== All heap blocks were freed -- no leaks are possible

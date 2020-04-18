@@ -20,7 +20,7 @@ int main()
     server->SetRecvHandler(handler);
     server->Run();
 
-    const int max = 100;
+    const int max = 1000;
     int sleep_time = 50;
 
     std::string hostname;
@@ -29,7 +29,7 @@ int main()
     std::string tail = dcore::RandomString(1008);
 
     int fds[max] = {0};
-    for (int i = 0; i < 1000; ++i)
+    for (int i = 0; i < 100000; ++i)
     {
         for (int j = 0; j < max; ++j)
         {
@@ -63,6 +63,8 @@ int main()
                 }
                 else
                 {
+                    printf("Sent Fail Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d]\n", 
+                       localip.c_str(), 11111, fds[j], gone_len, want_len, n);
                     usleep(10);
                     ++failed_num;
                     close(fds[j]);
@@ -76,6 +78,7 @@ int main()
                 printf("\nall_num[%ld], failed_num[%ld], succ_rate[%ld]\n", all_num, failed_num, 1000000 - failed_num * 1000000 / all_num);
             }
             delete packet;
+            //usleep(10);
         }
         usleep(sleep_time);
     }

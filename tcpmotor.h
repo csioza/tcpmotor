@@ -6,6 +6,7 @@
 #include <iostream> 
 #include <string>
 #include <unordered_map>
+#include <queue>
 #include <vector>
 #include <stdbool.h>
 #include <cstring>
@@ -29,11 +30,15 @@
 
 namespace dcore {
 
-#define MAX_PACKET_SIZE     8192
-#define MAX_RECBUFF_SIZE    (MAX_PACKET_SIZE * 3)
-#define INVALID             -1 
-#define MAX_EVENT_NUM       1024
-#define INVALID_SOCKET      -1
+#define MAX_PACKET_SIZE         8192
+#define MAX_RECBUFF_SIZE        (MAX_PACKET_SIZE * 3)
+#define INVALID                 -1 
+#define MAX_EVENT_NUM           1024
+#define INVALID_SOCKET          -1
+#define LINK_FLAG_FORCE         1
+#define LINK_FLAG_CHECK_ACTIVE  2
+#define INT_64_MAX              0x7fffffffffffffff
+#define LINK_ACTIVE_TIMEOUT     3600//秒
 
 typedef char                int8;
 typedef short               int16;
@@ -67,6 +72,12 @@ public:
         gettimeofday(&tv, NULL);
         return tv.tv_sec * 1000000 + tv.tv_usec;
     }
+    static uint64 NowTimeS() {
+        return time(NULL);
+    }
+    // static uint64 NowTimeClick() {
+    //     return click();
+    // }
 };
 std::string RandomString(int len)
 {
@@ -395,12 +406,13 @@ class TcpMotor;
 class Link
 {
 public:
-    Link() : mFd(0), mHead(0), mEnd(0), mMotor(nullptr)
+    Link() : mFd(0), mHead(0), mEnd(0), mMotor(nullptr), mLastActiveTime(0)
     {
         memset(mBuff, 0, MAX_RECBUFF_SIZE);
     }
     virtual ~Link() {}
     virtual int OnRecv() {}
+    virtual void UpdateActiveTime(int64 now) { mLastActiveTime = now + LINK_ACTIVE_TIMEOUT; }
     //   
     int         mFd;
     int         mHead;
@@ -409,13 +421,14 @@ public:
     int64       mLastActiveTime;
     std::string mIp;//远端ip
     int         mPort;//远端port
+    std::string mKey;//远端ip
     TcpMotor*   mMotor;
 };
 
 class SocketLink : public Link
 {
 public:
-    SocketLink() {}
+    SocketLink() { mLastActiveTime = TimeUtil::NowTimeS() + LINK_ACTIVE_TIMEOUT; }
     virtual ~SocketLink() {}
     virtual int OnRecv();
 };
@@ -423,9 +436,10 @@ public:
 class AcceptLink : public Link
 {
 public:
-    AcceptLink() {}
+    AcceptLink() { mLastActiveTime = INT_64_MAX; }
     virtual ~AcceptLink() {}
     virtual int OnRecv();
+    virtual void UpdateActiveTime(int64 now) {}
 };
 
 class TcpMotor
@@ -454,7 +468,8 @@ public:
         SocketUtil::GetHostInfo(hostname, localip);
         link->mFd       = SocketUtil::CreateBindListen(localip, mPort, false);
         link->mMotor    = this;
-        AddLink(link, false);
+        link->mKey      = SocketUtil::MakeKeyByIpPort(localip, mPort);
+        AddLink(link);
         std::cout << "TcpMotor running!" << std::endl;
         mThread = std::thread(&TcpMotor::Loop, this);
         pthread_setname_np(mThread.native_handle(), "TcpMotor-Loop");
@@ -467,10 +482,35 @@ public:
         for (auto it : mIpPortLink)
             DelLink(it.second);
     }
+    void SetRecvHandler(TcpRecvHandler* recv) { mRecvHandler = recv; }
+    void SetSendHandler(TcpSendHandler* send) { mSendHandler = send; }
+    void Send(std::string ip, int port, void* data, int len, void* ctx)
+    {
+        SendPacket *packet = new SendPacket(ip, port, data, len, ctx);
+        bool r = mSendQueue.enqueue(packet);
+    }
+    void RecvHandler(std::string callback_ip, int callback_port, void* content, int contentLen)
+    {
+        mRecvHandler->OnRecv(callback_ip, callback_port, (char *)content, contentLen); 
+    }
+    int AddLink(Link *link)
+    {
+        mIpPortLink[link->mKey] = link;
+        struct epoll_event event;
+        event.events    = EPOLLIN | EPOLLET;
+        event.data.fd   = link->mFd;
+        event.data.ptr  = (void *)link;
+        int result = epoll_ctl(mEpollFd, EPOLL_CTL_ADD, link->mFd, &event);
+        mLinkTimer.push(std::make_pair(link->mLastActiveTime, link->mKey));
+        //std::cout << "AddLink mFd=" << std::to_string(link->mFd) << ", result=" << std::to_string(result) << std::endl;
+        return result;
+    }
+private:
     void Loop()
     {
         while (mIsRunning)
         {
+            int64 now = TimeUtil::NowTimeS();
             int cnt = Wait(0);
             for (int i = 0; i < cnt; ++i)
             {
@@ -479,24 +519,19 @@ public:
                     Link *link = (Link *)mEvents[i].data.ptr;
                     if (!link)
                         continue;
+                    link->UpdateActiveTime(now);
                     if (link->OnRecv() != 0)
                         DelLink(link);
                 }
             }
             cnt  = cnt > 0 ? cnt : 0;
-            cnt += SendHandler(cnt + 1);
-            //if (cnt > 0) usleep(1);
-            cnt > 0 ? usleep(2) : usleep(1);
-            //usleep(2);
+            cnt += SendHandler(cnt + 1, now);
+            CheckLinkActive(now);
+            //cnt > 0 ? usleep(10) : usleep(1);
+            usleep(2);
         }
     }
-    void SetRecvHandler(TcpRecvHandler* recv) { mRecvHandler = recv; }
-    void SetSendHandler(TcpSendHandler* send) { mSendHandler = send; }
-    void RecvHandler(std::string callback_ip, int callback_port, void* content, int contentLen)
-    {
-        mRecvHandler->OnRecv(callback_ip, callback_port, (char *)content, contentLen); 
-    }
-    int SendHandler(int num)
+    int SendHandler(int num, int64 now)
     {
         int send_num = 0;
         for (int i = 0; i < num; ++i)
@@ -518,13 +553,15 @@ public:
                 link->mIp           = packet->mIp;
                 link->mPort         = packet->mPort;
                 link->mMotor        = this;
+                link->mKey          = key;
                 mIpPortLink[key]    = link;
-                AddLink(link, true);
+                AddLink(link);
             }
             else
                 link = it->second;
             if (!link)
                 continue;
+            link->UpdateActiveTime(now);
             int fail_num = 0;
             int want_len = packet->mLen;
             int gone_len = 0;
@@ -561,33 +598,11 @@ public:
         }
         return send_num;
     }
-    void Send(std::string ip, int port, void* data, int len, void* ctx)
-    {
-        SendPacket *packet = new SendPacket(ip, port, data, len, ctx);
-        bool r = mSendQueue.enqueue(packet);
-    }
-    int AddLink(Link *link, bool isForce)
-    {
-        if (!isForce)
-        {
-            std::string key = SocketUtil::MakeKeyByIpPort(link->mIp, link->mPort);
-            auto it = mIpPortLink.find(key);
-            if (it == mIpPortLink.end())
-                mIpPortLink[key] = link;
-        }
-        struct epoll_event event;
-        event.events    = EPOLLIN | EPOLLET;
-        event.data.fd   = link->mFd;
-        event.data.ptr  = (void *)link;
-        int result = epoll_ctl(mEpollFd, EPOLL_CTL_ADD, link->mFd, &event);
-        //std::cout << "AddLink mFd=" << std::to_string(link->mFd) << ", result=" << std::to_string(result) << std::endl;
-        return result;
-    }
     int DelLink(Link *link)
     {
         int result = epoll_ctl(mEpollFd, EPOLL_CTL_DEL, link->mFd, NULL);//TODO 删除失败情况
-        std::string key = SocketUtil::MakeKeyByIpPort(link->mIp, link->mPort);
-        auto it = mIpPortLink.find(key);
+        //std::string key = SocketUtil::MakeKeyByIpPort(link->mIp, link->mPort);
+        auto it = mIpPortLink.find(link->mKey);
         if (it != mIpPortLink.end())
             mIpPortLink.erase(it);
         //std::cout << "DelLink mFd=" << std::to_string(link->mFd) << ", result=" << std::to_string(result) << std::endl;
@@ -608,6 +623,22 @@ public:
     {
         return epoll_wait(mEpollFd, mEvents, MAX_EVENT_NUM, timeout);
     }
+    void CheckLinkActive(int64 now)
+    {
+        while(!mLinkTimer.empty() && mLinkTimer.top().first <= now)
+        {
+            auto it = mIpPortLink.find(mLinkTimer.top().second);
+            if (it != mIpPortLink.end() && it->second)
+            {
+                if (it->second->mLastActiveTime <= mLinkTimer.top().first)
+                    DelLink(it->second);
+                else
+                    mLinkTimer.push(std::make_pair(now + LINK_ACTIVE_TIMEOUT, it->second->mKey));
+            }
+            //std::cout << "CheckLinkActive=" << mLinkTimer.top().second << std::endl;
+            mLinkTimer.pop();
+        }
+    }
 private:
     int                     mPort;
     bool                    mIsRunning;
@@ -618,6 +649,10 @@ private:
     struct epoll_event      *mEvents;
     std::thread             mThread;
     moodycamel::ConcurrentQueue<SendPacket*> mSendQueue;
+    //
+    using Pair = std::pair<int64, std::string>;
+    struct cmp { bool operator() (const Pair &a, const Pair &b) { return a.first > b.first; } };
+    std::priority_queue<Pair, std::vector<Pair>, cmp> mLinkTimer;
 };
 int SocketLink::OnRecv()
 {
@@ -743,7 +778,8 @@ int AcceptLink::OnRecv()
         new_link->mMotor    = mMotor;
         new_link->mIp       = ip;
         new_link->mPort     = atoi(port);
-        mMotor->AddLink(new_link, false);
+        new_link->mKey      = SocketUtil::MakeKeyByIpPort(new_link->mIp, new_link->mPort);
+        mMotor->AddLink(new_link);
     }
     return 0;
 }
