@@ -16,7 +16,7 @@ a tcp transmit lib, two files, lock free, two threads
 	
 ## 测试数据
 	
-	占用一个CPU 75～85%， 8万QPS， 平均延时3.5ms
+	占用一个CPU 75～85%， 8万QPS， 平均延时658us
 	
 	all_num[30500000], failed_num[0], succ_rate[1000000]
 	msg_len     [1024]
