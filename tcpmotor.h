@@ -274,9 +274,19 @@ public:
         Ip = ipStr;
         return true;
     }
-    static std::string MakeKeyByIpPort(const std::string &ip, int port)
+    // static std::string MakeKeyByIpPort(const std::string &ip, int port)
+    // {
+    //     return ip + ":" + std::to_string(port);
+    // }
+    static uint64 MakeKeyByIpPort(const std::string &ip, int port)
     {
-        return ip + ":" + std::to_string(port);
+        struct in_addr ip_addr;
+        if (0 == inet_aton(ip.c_str(), &ip_addr))
+        {
+            printf("MakeKeyIpPort fail, ip[%s], port[%d]\n", ip.c_str(), port);
+            return 0;
+        }
+        return ((uint64)ip_addr.s_addr << 32) | (uint64)port;
     }
     static int CreateBind(const std::string &ip, int port)
     {
@@ -421,7 +431,7 @@ public:
     int64       mLastActiveTime;
     std::string mIp;//远端ip
     int         mPort;//远端port
-    std::string mKey;//远端ip
+    uint64      mKey;//
     TcpMotor*   mMotor;
 };
 
@@ -540,8 +550,8 @@ private:
             bool result = mSendQueue.try_dequeue(packet);
             if (!result || !packet)
                 return send_num;
-            std::string key = SocketUtil::MakeKeyByIpPort(packet->mIp, packet->mPort);
-            Link *link = nullptr;
+            auto key    = SocketUtil::MakeKeyByIpPort(packet->mIp, packet->mPort);
+            Link *link  = nullptr;
             auto it = mIpPortLink.find(key);
             if (it == mIpPortLink.end())
             {
@@ -642,13 +652,14 @@ private:
     bool                    mIsRunning;
     TcpRecvHandler*         mRecvHandler;
     TcpSendHandler*         mSendHandler;
-    std::unordered_map<std::string, Link*> mIpPortLink;//key: ip:port
     int                     mEpollFd;
     struct epoll_event      *mEvents;
     std::thread             mThread;
-    moodycamel::ConcurrentQueue<SendPacket*> mSendQueue;
+    //std::unordered_map<uint64, std::shared_ptr<Link>>   mIpPortLink;
+    std::unordered_map<uint64, Link*>           mIpPortLink;
+    moodycamel::ConcurrentQueue<SendPacket*>    mSendQueue;
     //
-    using Pair = std::pair<int64, std::string>;
+    using Pair = std::pair<int64, uint64>;
     struct cmp { bool operator() (const Pair &a, const Pair &b) { return a.first > b.first; } };
     std::priority_queue<Pair, std::vector<Pair>, cmp> mLinkTimer;
 };
