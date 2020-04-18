@@ -35,8 +35,6 @@ namespace dcore {
 #define INVALID                 -1 
 #define MAX_EVENT_NUM           1024
 #define INVALID_SOCKET          -1
-#define LINK_FLAG_FORCE         1
-#define LINK_FLAG_CHECK_ACTIVE  2
 #define INT_64_MAX              0x7fffffffffffffff
 #define LINK_ACTIVE_TIMEOUT     3600//秒
 
@@ -48,8 +46,6 @@ typedef unsigned char       uint8;
 typedef unsigned short      uint16;
 typedef unsigned int        uint32;
 typedef unsigned long long  uint64;
-
-typedef void (*callback)(void*);
 
 #pragma pack(1)
 struct Packet  //用于线程的收发队列里
