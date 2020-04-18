@@ -534,7 +534,7 @@ private:
             cnt += SendHandler(cnt + 1, now);
             CheckLinkActive(now);
             //cnt > 0 ? usleep(10) : usleep(1);
-            usleep(2);
+            usleep(100);
         }
     }
     int SendHandler(int num, int64 now)
