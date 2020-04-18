@@ -655,7 +655,6 @@ private:
     int                     mEpollFd;
     struct epoll_event      *mEvents;
     std::thread             mThread;
-    //std::unordered_map<uint64, std::shared_ptr<Link>>   mIpPortLink;
     std::unordered_map<uint64, Link*>           mIpPortLink;
     moodycamel::ConcurrentQueue<SendPacket*>    mSendQueue;
     //
