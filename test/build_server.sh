@@ -6,11 +6,13 @@ sed -i "s/client/server/g" "./CMakeLists.txt"
 sed -i "s/TEST_CPP/test_server.cpp/g" "./CMakeLists.txt"
 sed -i "s/test_client.cpp/test_server.cpp/g" "./CMakeLists.txt"
 
-rm -rf obj
+cp ../*.h ./
 
-mkdir obj
+rm -rf server
 
-cd obj
+mkdir server
+
+cd server
 
 cmake ..
 make
