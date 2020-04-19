@@ -21,7 +21,7 @@ int main()
     server->Run();
 
     const int max = 1000;
-    int sleep_time = 50;
+    int sleep_time = 500;
 
     std::string hostname;
     std::string localip;
@@ -73,15 +73,21 @@ int main()
                 }
             }
             all_num++;
-            if (all_num % 100000 == 0)
+            if (all_num % 200000 == 0)
             {
-                printf("\nall_num[%ld], failed_num[%ld], succ_rate[%ld]\n", all_num, failed_num, 1000000 - failed_num * 1000000 / all_num);
+                printf("\nall_num[%ld], failed_num[%ld], succ_rate[%ld]\n", all_num, failed_num, 2000000 - failed_num * 2000000 / all_num);
             }
             delete packet;
             //usleep(10);
         }
         usleep(sleep_time);
     }
+
+    // while(1)
+    // {
+    //     usleep(100000);
+    // }
+
     server->Stop();
     delete server;
 
