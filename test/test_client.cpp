@@ -8,27 +8,23 @@ static void stop(int signo)
 {
     printf("\nall_num[%ld], failed_num[%ld], succ_rate[%ld]\n", all_num, failed_num, 1000000 - failed_num * 1000000 / all_num);
 }
-int main()
+int main(int argc, char *argv[])
 {
 
     // if (signal(SIGINT, stop) == SIG_ERR) {
     //     return 0;
     // }
 
-    dcore::TcpMotor *server = new dcore::TcpMotor(11111);
-    dcore::TcpRecvHandler * handler = new dcore::TcpRecvHandler();
-    server->SetRecvHandler(handler);
-    server->Run();
-
-    const int max = 1000;
-    int sleep_time = 500;
+    const int max = atoi(argv[0]);
+    int sleep_time = atoi(argv[1]);
 
     std::string hostname;
     std::string localip;
     dcore::SocketUtil::GetHostInfo(hostname, localip);
-    std::string tail = dcore::RandomString(1008);
+    std::string tail = dcore::RandomString(atoi(argv[2]));
 
-    int fds[max] = {0};
+    int *fds = new int[max];
+    memset(fds, 0 , sizeof(fds));
     for (int i = 0; i < 100000; ++i)
     {
         for (int j = 0; j < max; ++j)
@@ -88,8 +84,6 @@ int main()
     //     usleep(100000);
     // }
 
-    server->Stop();
-    delete server;
 
     return 0;
 }
