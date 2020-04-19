@@ -37,6 +37,7 @@ namespace dcore {
 #define INVALID_SOCKET          -1
 #define INT_64_MAX              0x7fffffffffffffff
 #define LINK_ACTIVE_TIMEOUT     3600//秒
+#define MAIN_LOOP_SLEEP         10
 
 typedef char                int8;
 typedef short               int16;
@@ -534,7 +535,7 @@ private:
             cnt += SendHandler(cnt + 1, now);
             CheckLinkActive(now);
             //cnt > 0 ? usleep(10) : usleep(1);
-            usleep(100);
+            usleep(MAIN_LOOP_SLEEP);
         }
     }
     int SendHandler(int num, int64 now)
