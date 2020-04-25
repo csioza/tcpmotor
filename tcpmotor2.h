@@ -39,7 +39,7 @@ typedef unsigned long long  uint64;
 
 namespace dcore {
 
-#define TRIGGER_NUM             4
+#define TRIGGER_NUM             1
 #define MAX_PACKET_SIZE         8192
 #define MAX_RECBUFF_SIZE        (MAX_PACKET_SIZE * 3)
 #define INVALID                 -1 
@@ -358,6 +358,7 @@ public:
     }
     void Run()
     {
+        mIsRunning = true;
         std::cout << "Trigger running!" << std::endl;
         mThread = std::thread(&Trigger::Loop, this);
         pthread_setname_np(mThread.native_handle(), "TcpMotor-Trigger-Loop");
