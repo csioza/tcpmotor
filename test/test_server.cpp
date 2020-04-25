@@ -79,7 +79,7 @@ public:
                 /*data.c_str(), */contentLen, qps,
                 us0_499, us500_999, ms1_9, ms10_19, ms20_29, ms30_39, ms40_49,ms50_59, ms60_69, ms70_79, ms80_89, ms90_99, 
                 ms100_199, ms200_299, ms300_399, ms400_499, ms500_599, ms600_699, ms700_799, ms800_899, ms900_999, ms1000X,
-                average, sumCount);
+                average, sumCount.load());
             sumCount = 0;
             us0_499 = 0;
             us500_999 = 0;
@@ -109,7 +109,7 @@ public:
         // printf("TcpRecvHandler::OnRecv from ip[%s], port[%d], content[%s], contentLen[%d], sub[%d]\n",
         //         callback_ip.c_str(), callback_port, data.c_str(), contentLen, now - stoll(data));
     }
-    int64 sumCount;
+    std::atomic<int64> sumCount;
     int64 us0_499;
     int64 us500_999;
     int64 ms1_9;
