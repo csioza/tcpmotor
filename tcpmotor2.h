@@ -39,7 +39,7 @@ typedef unsigned long long  uint64;
 
 namespace dcore {
 
-#define TRIGGER_NUM             1
+#define TRIGGER_NUM             4
 #define MAX_PACKET_SIZE         8192
 #define MAX_RECBUFF_SIZE        (MAX_PACKET_SIZE * 3)
 #define INVALID                 -1 
