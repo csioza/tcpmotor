@@ -28,6 +28,15 @@
 //
 #include "concurrentqueue.h"
 
+typedef char                int8;
+typedef short               int16;
+typedef int                 int32;
+typedef long long           int64;
+typedef unsigned char       uint8;
+typedef unsigned short      uint16;
+typedef unsigned int        uint32;
+typedef unsigned long long  uint64;
+
 namespace dcore {
 
 #define MAX_PACKET_SIZE         8192
@@ -39,19 +48,10 @@ namespace dcore {
 #define LINK_ACTIVE_TIMEOUT     3600//秒
 #define MAIN_LOOP_SLEEP         10
 
-typedef char                int8;
-typedef short               int16;
-typedef int                 int32;
-typedef long long           int64;
-typedef unsigned char       uint8;
-typedef unsigned short      uint16;
-typedef unsigned int        uint32;
-typedef unsigned long long  uint64;
-
 #pragma pack(1)
 struct Packet  //用于线程的收发队列里
 {
-    uint16 len;//64k, 总包长度，包含len长度
+    uint32 len;//总包长度，包含len长度
     char data[0];
 };
 #pragma pack()
@@ -103,142 +103,17 @@ std::string RandomString(int len)
 class TcpRecvHandler
 {
 public:
-    TcpRecvHandler() : sumCount(0), us0_499(0), us500_999(0),
-            ms10_19(0), ms20_29(0), ms30_39(0), ms40_49(0), ms50_59(0), ms60_69(0), ms70_79(0), ms80_89(0), ms90_99(0), 
-            ms100_199(0), ms200_299(0), ms300_399(0), ms400_499(0), ms500_599(0), ms600_699(0), ms700_799(0), ms800_899(0), ms900_999(0), 
-            ms1000X(0), sumSub(0), average(0) {}
-    ~TcpRecvHandler() {}
-    virtual void OnRecv(std::string callback_ip, int callback_port, char* content, int contentLen) 
-    {
-        static int64 last = TimeUtil::NowTimeUs();
-        std::string data(content, content + contentLen);
-        std::string time(content, content + 16);
-        int64 now = TimeUtil::NowTimeUs();
-        sumCount++;
-        int64 sub = now - stoll(time);
-        if (sub < 500)
-            us0_499++;
-        else if (sub < 1000)
-            us500_999++;
-        else if (sub < 10000)
-            ms1_9++;
-        else if (sub < 20000)
-            ms10_19++;
-        else if (sub < 30000)
-            ms20_29++;
-        else if (sub < 40000)
-            ms30_39++;
-        else if (sub < 50000)
-            ms40_49++;
-        else if (sub < 60000)
-            ms50_59++;
-        else if (sub < 70000)
-            ms60_69++;
-        else if (sub < 80000)
-            ms70_79++;
-        else if (sub < 90000)
-            ms80_89++;
-        else if (sub < 100000)
-            ms90_99++;
-        else if (sub < 200000)
-            ms100_199++;
-        else if (sub < 300000)
-            ms200_299++;
-        else if (sub < 400000)
-            ms300_399++;
-        else if (sub < 500000)
-            ms400_499++;
-        else if (sub < 600000)
-            ms500_599++;
-        else if (sub < 700000)
-            ms600_699++;
-        else if (sub < 800000)
-            ms700_799++;
-        else if (sub < 900000)
-            ms800_899++;
-        else if (sub < 1000000)
-            ms900_999++;
-        else
-            ms1000X++;
-        sumSub += sub;
-        if (sumCount != 0 && sumCount % 200000 == 0)
-        {
-            average = sumSub / sumCount;
-            int64 qps = sumCount * 1000000 / (now - last);
-
-            printf("\nmsg_len     [%ld]\nqps         [%ld]\nus0_499     [%ld]\nus500_999   [%ld]\nms1_9       [%ld]\nms10_19     [%ld]\nms20_29     [%ld]\nms30_39     [%ld]\nms40_49     [%ld]\nms50_59     [%ld]\nms60_69     [%ld]\nms70_79     [%ld]\nms80_89     [%ld]\nms90_99     [%ld]\nms100_199   [%ld]\nms200_299   [%ld]\nms300_399   [%ld]\nms400_499   [%ld]\nms500_599   [%ld]\nms600_699   [%ld]\nms700_799   [%ld]\nms800_899   [%ld]\nms900_999   [%ld]\nms1000X     [%ld]\naverage     [%ld]\nsumCount    [%ld]\n" ,
-                /*data.c_str(), */contentLen, qps,
-                us0_499, us500_999, ms1_9, ms10_19, ms20_29, ms30_39, ms40_49,ms50_59, ms60_69, ms70_79, ms80_89, ms90_99, 
-                ms100_199, ms200_299, ms300_399, ms400_499, ms500_599, ms600_699, ms700_799, ms800_899, ms900_999, ms1000X,
-                average, sumCount);
-            sumCount = 0;
-            us0_499 = 0;
-            us500_999 = 0;
-            ms1_9 = 0;
-            ms10_19 = 0;
-            ms20_29 = 0;
-            ms30_39 = 0;
-            ms40_49 = 0;
-            ms50_59 = 0;
-            ms60_69 = 0;
-            ms70_79 = 0;
-            ms80_89 = 0;
-            ms90_99 = 0;
-            ms100_199 = 0;
-            ms200_299 = 0;
-            ms300_399 = 0;
-            ms400_499 = 0;
-            ms500_599 = 0;
-            ms600_699 = 0;
-            ms700_799 = 0;
-            ms800_899 = 0;
-            ms900_999 = 0;
-            ms1000X = 0;
-            sumSub = 0;
-            last = now;
-        }
-        // printf("TcpRecvHandler::OnRecv from ip[%s], port[%d], content[%s], contentLen[%d], sub[%d]\n",
-        //         callback_ip.c_str(), callback_port, data.c_str(), contentLen, now - stoll(data));
-    }
-    int64 sumCount;
-    int64 us0_499;
-    int64 us500_999;
-    int64 ms1_9;
-    int64 ms10_19;
-    int64 ms20_29;
-    int64 ms30_39;
-    int64 ms40_49;
-    int64 ms50_59;
-    int64 ms60_69;
-    int64 ms70_79;
-    int64 ms80_89;
-    int64 ms90_99;
-    int64 ms100_199;
-    int64 ms200_299;
-    int64 ms300_399;
-    int64 ms400_499;
-    int64 ms500_599;
-    int64 ms600_699;
-    int64 ms700_799;
-    int64 ms800_899;
-    int64 ms900_999;
-    int64 ms1000X;
-    int64 sumSub;
-    int64 average;
+    TcpRecvHandler() {}
+    virtual ~TcpRecvHandler() {}
+    virtual void OnRecv(std::string callback_ip, int callback_port, char* content, int contentLen) = 0;
 };
 class TcpSendHandler
 {
 public:
     TcpSendHandler() {}
-    ~TcpSendHandler() {}
-    virtual void OnSuccess(std::string ip, int port, void* ctx) 
-    {
-        printf("TcpSendHandler::OnSuccess to ip[%s], port[%d]\n", ip.c_str(), port);
-    }
-    virtual void OnFailure(std::string ip, int port, void* ctx) 
-    {
-        printf("TcpSendHandler::OnFailure to ip[%s], port[%d]\n", ip.c_str(), port);
-    }
+    virtual ~TcpSendHandler() {}
+    virtual void OnSuccess(std::string ip, int port, void* ctx) = 0;
+    virtual void OnFailure(std::string ip, int port, void* ctx) = 0;
 };
 class RecvPacket
 {
@@ -295,10 +170,6 @@ public:
         Ip = ipStr;
         return true;
     }
-    // static std::string MakeKeyByIpPort(const std::string &ip, int port)
-    // {
-    //     return ip + ":" + std::to_string(port);
-    // }
     static uint64 MakeKeyByIpPort(const std::string &ip, int port)
     {
         struct in_addr ip_addr;
@@ -317,16 +188,13 @@ public:
             std::cout << "invalid socket !\n" << std::endl;
             return sfd;
         }
-        //绑定端口 
-        sockaddr_in serverAddr;
+        sockaddr_in serverAddr;//绑定端口 
         serverAddr.sin_family = AF_INET;
         serverAddr.sin_addr.s_addr = inet_addr(ip.c_str());
         serverAddr.sin_port = htons(port);
-        //绑定  
         int iErrorMsg = bind(sfd, (sockaddr*)&serverAddr, sizeof(serverAddr));  
-        if (iErrorMsg < 0)  
+        if (iErrorMsg < 0)  //绑定失败  
         {  
-            //绑定失败  
             printf("bind failed with error : %d\n", iErrorMsg); 
             return -2;  
         }
@@ -335,15 +203,13 @@ public:
     static int Nonblock(int sfd)
     {
         int flags;
-        //得到文件状态标志
-        flags = fcntl (sfd, F_GETFL, 0);
+        flags = fcntl (sfd, F_GETFL, 0);//得到文件状态标志
         if (flags == INVALID)
         {
             printf("fcntl failed\n");
             return INVALID;
         }
-        //设置文件状态标志
-        flags |= O_NONBLOCK;
+        flags |= O_NONBLOCK;//设置文件状态标志
         if (fcntl (sfd, F_SETFL, flags) == INVALID)
         {
             printf("fcntl failed\n");
@@ -367,7 +233,7 @@ public:
 
         if(connect(sfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
         {
-            printf("connect error\n");
+            printf("connect error, ip[%s], port[%d]\n", ip.c_str(), port);
             return -2;
         }
         if (Nonblock(sfd) < 0)
@@ -428,7 +294,6 @@ public:
         }
         return 0;
     }
-    
 };
 ///////////////////////////////////////////////////////////////////////////////
 //main class
@@ -455,7 +320,6 @@ public:
     uint64      mKey;//
     TcpMotor*   mMotor;
 };
-
 class SocketLink : public Link
 {
 public:
@@ -463,7 +327,6 @@ public:
     virtual ~SocketLink() {}
     virtual int OnRecv();
 };
-
 class AcceptLink : public Link
 {
 public:
@@ -812,5 +675,4 @@ int AcceptLink::OnRecv()
     }
     return 0;
 }
-
 } //namespace dcore

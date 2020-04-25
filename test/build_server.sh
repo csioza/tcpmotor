@@ -16,3 +16,5 @@ cd server
 
 cmake ..
 make
+
+cp server ../s

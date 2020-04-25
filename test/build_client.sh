@@ -16,3 +16,5 @@ cd client
 
 cmake ..
 make
+
+cp client ../c
