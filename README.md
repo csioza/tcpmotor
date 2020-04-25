@@ -1,5 +1,5 @@
 # TcpMotor
-a tcp transmit lib, two files, lock free, two threads
+a tcp transmit lib, two files, lock free, single thread
 
 	TODO:
 	
@@ -10,7 +10,7 @@ a tcp transmit lib, two files, lock free, two threads
 	4.增强健壮性
 	
 	版本2
-	1.尝试多个epoll,开多个线程处理收发，增加triger
+	1.尝试多个epoll,开多个线程处理收发，增加trigger
 	
 ## 环境
 
