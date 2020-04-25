@@ -17,7 +17,35 @@ a tcp transmit lib, two files, lock free, single thread
 	docker centos7 5cpu
 	
 ## 测试数据
-	
+
+	跨docker容器
+	msg_len     [2048]
+	qps         [41271]
+	us0_499     [99969]
+	us500_999   [31]
+	ms1_9       [0]
+	ms10_19     [0]
+	ms20_29     [0]
+	ms30_39     [0]
+	ms40_49     [0]
+	ms50_59     [0]
+	ms60_69     [0]
+	ms70_79     [0]
+	ms80_89     [0]
+	ms90_99     [0]
+	ms100_199   [0]
+	ms200_299   [0]
+	ms300_399   [0]
+	ms400_499   [0]
+	ms500_599   [0]
+	ms600_699   [0]
+	ms700_799   [0]
+	ms800_899   [0]
+	ms900_999   [0]
+	ms1000X     [0]
+	average     [195]
+	sumCount    [100000]
+
 	重启 usleep(100); cpu:53%
 	all_num[32200000], failed_num[0], succ_rate[1000000]
 	msg_len     [1024]
