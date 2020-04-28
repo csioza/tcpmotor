@@ -11,6 +11,7 @@ test/tcpmotor2.h
 test/concurrentqueue.h
 o/
 emit/
+*.out
 *.sdf
 *.suo
 *.opensdf
