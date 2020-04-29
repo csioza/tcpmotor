@@ -155,47 +155,50 @@ int main(int argc, char *argv[])
     int packet_size = atoi(argv[5]);
     packet_size = packet_size > 16 ? packet_size - 16 : packet_size;
 
-    dcore::TcpMotor *server = new dcore::TcpMotor(11122);
+    dcore::TcpMotor *server = new dcore::TcpMotor(11122, 3);
     dcore::TcpRecvHandler * handler = new TestTcpRecvHandler();
     server->SetRecvHandler(handler);
     server->Run();
 
-    dcore::TcpMotor *server2 = new dcore::TcpMotor(11123);
-    dcore::TcpRecvHandler * handler2 = new TestTcpRecvHandler();
-    server2->SetRecvHandler(handler2);
-    server2->Run();
-    dcore::TcpMotor *server3 = new dcore::TcpMotor(11133);
-    dcore::TcpRecvHandler * handler3 = new TestTcpRecvHandler();
-    server3->SetRecvHandler(handler3);
-    server3->Run();
-    dcore::TcpMotor *server4 = new dcore::TcpMotor(11132);
-    dcore::TcpRecvHandler * handler4 = new TestTcpRecvHandler();
-    server4->SetRecvHandler(handler4);
-    server4->Run();
-    dcore::TcpMotor *server5 = new dcore::TcpMotor(11222);
-    dcore::TcpRecvHandler * handler5 = new TestTcpRecvHandler();
-    server5->SetRecvHandler(handler5);
-    server5->Run();
+    // dcore::TcpMotor *server2 = new dcore::TcpMotor(11123);
+    // dcore::TcpRecvHandler * handler2 = new TestTcpRecvHandler();
+    // server2->SetRecvHandler(handler2);
+    // server2->Run();
+    // dcore::TcpMotor *server3 = new dcore::TcpMotor(11133);
+    // dcore::TcpRecvHandler * handler3 = new TestTcpRecvHandler();
+    // server3->SetRecvHandler(handler3);
+    // server3->Run();
+    // dcore::TcpMotor *server4 = new dcore::TcpMotor(11132);
+    // dcore::TcpRecvHandler * handler4 = new TestTcpRecvHandler();
+    // server4->SetRecvHandler(handler4);
+    // server4->Run();
+    // dcore::TcpMotor *server5 = new dcore::TcpMotor(11222);
+    // dcore::TcpRecvHandler * handler5 = new TestTcpRecvHandler();
+    // server5->SetRecvHandler(handler5);
+    // server5->Run();
 
     std::string tail = dcore::RandomString(packet_size);
-    int run_time = 300;
+    int run_time = atoi(argv[6]);
     int endtime = dcore::TimeUtil::NowTimeS() + run_time;
     int count = 0;
-    char* content = new char[100000];
-    while (endtime > dcore::TimeUtil::NowTimeS()) 
+    while (count < 100000000)//endtime > dcore::TimeUtil::NowTimeS()) 
     {
         std::string data = std::to_string(dcore::TimeUtil::NowTimeUs()) + tail;
-        memcpy(content, data.c_str(), data.size());
-        for (int i = 0; i < 3; ++i)
+        //memcpy(content, data.c_str(), data.size());
+        for (int i = 0; i < max; ++i)
         {
-            server->Send(ip, port, content, data.size(), NULL);
-            server2->Send(ip, port, content, data.size(), NULL);
-            server3->Send(ip, port, content, data.size(), NULL);
-            server4->Send(ip, port, content, data.size(), NULL);
-            server5->Send(ip, port, content, data.size(), NULL);
-            count += 5;
+            server->Send(ip, port, data.c_str(), data.size(), NULL);
+            count++;
         }
-        usleep(30);
+        // for (int i = 0; i < 3; ++i)
+        // {
+        //     server->Send(ip, port, content, data.size(), NULL);
+        //     server2->Send(ip, port, content, data.size(), NULL);
+        //     server3->Send(ip, port, content, data.size(), NULL);
+        //     server4->Send(ip, port, content, data.size(), NULL);
+        //     server5->Send(ip, port, content, data.size(), NULL);
+        //     count += 5;
+        // }
         // server->Send(ip, port, content, data.size(), NULL);
         // count++;
         // usleep(1);
@@ -205,13 +208,12 @@ int main(int argc, char *argv[])
         // count++;
         // usleep(1);
         // server->Send(ip, port, content, data.size(), NULL);
-        // count++;
-        if (count % 10000 == 0)
+        if (count % 100000 == 0)
         {
             printf("send packet num %d\n",count);
         }
+        usleep(sleep_time);
     }
-    delete[] content;
     ////////////////////////////////////////////////////////
     // std::string ip = argv[1];
     // int port = atoi(argv[2]);

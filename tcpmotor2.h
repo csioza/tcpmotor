@@ -40,7 +40,7 @@ typedef unsigned long long  uint64;
 
 namespace dcore {
 
-#define TRIGGER_NUM             1
+#define MAX_TRIGGER_NUM         100
 #define MAX_PACKET_SIZE         8192
 #define MAX_RECBUFF_SIZE        (MAX_PACKET_SIZE * 3)
 #define INVALID                 -1 
@@ -49,7 +49,6 @@ namespace dcore {
 #define INVALID_SOCKET          -1
 #define INT_64_MAX              0x7fffffffffffffff
 #define LINK_ACTIVE_TIMEOUT     3600//秒
-#define MAIN_LOOP_SLEEP         10
 #define EPOLL_WAIT_TIMEOUT      10000//毫秒
 
 #pragma pack(1)
@@ -138,13 +137,13 @@ public:
 class SendPacket
 {
 public:
-    SendPacket(std::string ip, int port, void* data, int len, void* ctx) : mIp(ip), mPort(port), mCtx(ctx)
+    SendPacket(std::string ip, int port, const char* data, int len, void* ctx) : mIp(ip), mPort(port), mCtx(ctx)
     {
         mLen            = len + sizeof(Packet);
         mData           = (char *)malloc(mLen);
         Packet *packet  = (Packet *)mData;
         packet->len     = mLen;
-        memcpy(packet->data, (char *)data, len);
+        memcpy(packet->data, data, len);
     }
     ~SendPacket()
     {
@@ -630,14 +629,15 @@ private:
 class TcpMotor
 {
 public:
-    TcpMotor(int port) : mPort(port), mRecvHandler(nullptr), mSendHandler(nullptr)
+    TcpMotor(int port, int trigger_num) : mPort(port), mRecvHandler(nullptr), mSendHandler(nullptr), mAutoInc(0)
     {
-        for (int i = 0; i < TRIGGER_NUM; ++i)
+        mTriggerNum = trigger_num > MAX_TRIGGER_NUM ? MAX_TRIGGER_NUM : trigger_num;
+        for (int i = 0; i < mTriggerNum; ++i)
             mTriggers[i] = new Trigger(this);
     }
     ~TcpMotor()
     {
-        for (int i = 0; i < TRIGGER_NUM; ++i)
+        for (int i = 0; i < mTriggerNum; ++i)
         {
             delete mTriggers[i];
         }
@@ -655,26 +655,27 @@ public:
         SocketUtil::GetHostInfo(hostname, localip);
         link->mFd       = SocketUtil::CreateBindListen(localip, mPort, false);
         link->mKey      = SocketUtil::MakeKeyByIpPort(localip, mPort);
-        for (int i = 0; i < TRIGGER_NUM; ++i)
+        for (int i = 0; i < mTriggerNum; ++i)
             mTriggers[i]->Run();
         mTriggers[0]->PushLink(link);
     }
     void Stop()
     {
-        for (int i = 0; i < TRIGGER_NUM; ++i)
+        for (int i = 0; i < mTriggerNum; ++i)
             mTriggers[i]->Stop();
     }
     void SetRecvHandler(TcpRecvHandler* recv) { mRecvHandler = recv; }
     void SetSendHandler(TcpSendHandler* send) { mSendHandler = send; }
-    void Send(std::string ip, int port, void* data, int len, void* ctx)
+    void Send(std::string ip, int port, const char* data, int len, void* ctx)
     {
         SendPacket *packet = new SendPacket(ip, port, data, len, ctx);
-        auto trigger = mTriggers[Mod(SocketUtil::MakeKeyByIpPort(ip, port), TRIGGER_NUM)];
+        //auto trigger = mTriggers[Mod(SocketUtil::MakeKeyByIpPort(ip, port), mTriggerNum)];
+        auto trigger = mTriggers[Mod(mAutoInc++, mTriggerNum)];
         trigger->PushPacket(packet);
     }
     int AddLink(Link *link)
     {
-        auto trigger = mTriggers[Mod(link->mKey, TRIGGER_NUM)];
+        auto trigger = mTriggers[Mod(link->mKey, mTriggerNum)];
         return trigger->PushLink(link);
     }
     void RecvHandler(std::string &ip, int port, void* content, int contentLen)
@@ -685,7 +686,10 @@ private:
     int                     mPort;
     TcpRecvHandler*         mRecvHandler;
     TcpSendHandler*         mSendHandler;
-    Trigger*                mTriggers[TRIGGER_NUM];
+    Trigger*                mTriggers[MAX_TRIGGER_NUM];
+    int                     mTriggerNum;
+    //
+    std::atomic<int>        mAutoInc;
 };
 
 int SocketLink::OnRecv(int64 now, int cnt)
@@ -806,7 +810,7 @@ int AcceptLink::OnRecv(int64 now, int cnt)
         }
         if (SocketUtil::Nonblock(socket_fd) < 0)
             continue;
-        //std::cout << "Accepted connection (ip=" << ip << ", port=" << port << ", socket_fd=" << std::to_string(socket_fd) << ")" << std::endl;    
+        std::cout << "Accepted connection (ip=" << ip << ", port=" << port << ", socket_fd=" << std::to_string(socket_fd) << ")" << std::endl;    
         Link *new_link      = new SocketLink();
         new_link->mFd       = socket_fd;
         new_link->mIp       = ip;

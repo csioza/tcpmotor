@@ -1,16 +1,13 @@
 # TcpMotor
-a tcp transmit lib, two files, lock free, single thread
+a tcp transmit lib, two files, lock free, multi threads
 
 	TODO:
 	
-	版本1
-	1.增加新线程用于剥离业务与TcpMotor线程，收队列，不阻塞TcpMotor(待定)
-	2.限流
-	3.DelLink 删除失败情况
-	4.增强健壮性
-	
-	版本2
-	1.尝试多个epoll,开多个线程处理收发，增加trigger
+	1.限流
+	2.DelLink 删除失败情况
+	3.增强健壮性
+	4.压测
+
 	
 ## 环境
 

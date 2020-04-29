@@ -23,7 +23,6 @@ public:
         std::string data(content, content + contentLen);
         std::string time(content, content + 16);
         int64 now = dcore::TimeUtil::NowTimeUs();
-        sumCount++;
         int64 sub = now - stoll(time);
         if (sub < 500)
             us0_499++;
@@ -70,6 +69,7 @@ public:
         else
             ms1000X++;
         sumSub += sub;
+        sumCount++;
         if (sumCount != 0 && sumCount % 10000 == 0)
         {
             average = sumSub / sumCount;
@@ -150,7 +150,7 @@ int main(int argc, char *argv[])
 
     int port = atoi(argv[1]);
 
-    dcore::TcpMotor *server = new dcore::TcpMotor(port);
+    dcore::TcpMotor *server = new dcore::TcpMotor(port, 3);
     dcore::TcpRecvHandler * handler = new TestTcpRecvHandler();
     server->SetRecvHandler(handler);
     server->Run();
