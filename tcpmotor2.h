@@ -27,7 +27,7 @@
 #include <sys/time.h>
 #include <signal.h>
 //
-#include "concurrentqueue.h"
+#include "concurrentqueue2.h"
 
 typedef char                int8;
 typedef short               int16;
