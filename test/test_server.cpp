@@ -159,7 +159,7 @@ int main(int argc, char *argv[])
     for (int i = 0; i < 2; ++i)
     {
         auto a = std::thread([=](){
-            for (int j = 0; j < 7; ++j)
+            for (int j = 0; j < 9; ++j)
             {
                 int m = 10000;
                 if (queue->Pop(&m))

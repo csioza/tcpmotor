@@ -9,7 +9,7 @@ static thread_local size_t thread_local_consumer_index_  = INVALID_NUM;
 template <typename T>
 class MutiQueue {
 public:
-    MutiQueue(size_t max_len, size_t qlen) : max_len_(max_len), producter_num_(1), consumer_num_(1) 
+    MutiQueue(size_t max_len, size_t qlen) : max_len_(max_len), producter_num_(0), consumer_num_(0) 
     {
         array_ = new OneQueue<T>**[max_len_];
         for (int i = 0; i < max_len_; ++i)
@@ -33,7 +33,7 @@ public:
         if (thread_local_producter_index_ == INVALID_NUM)
         {
             thread_local_producter_index_ = producter_num_++;
-            if (thread_local_producter_index_ > max_len_)
+            if (thread_local_producter_index_ >= max_len_)
             {
                 //TODO
                 std::cout << "error, thread_local_producter_index_=" << thread_local_producter_index_ << ", max_len_=" << max_len_ << std::endl;
@@ -42,11 +42,20 @@ public:
         }
         //std::cout << "thread_local_producter_index_=" << thread_local_producter_index_ << std::endl;
         size_t cur_consumer_num = consumer_num_;
+        if (cur_consumer_num == 0)
+        {
+            if (array_[thread_local_producter_index_][0]->Push(val))
+            {
+                std::cout << "producter_index[" << thread_local_producter_index_ << "] ==> val[" << val << "]==> consumer_index[" << 0 << "]" << std::endl;
+                return true;
+            }
+            return false;
+        }
         for (int i = 0; i < cur_consumer_num; ++i)
         {
-            if (array_[thread_local_producter_index_-1][i]->Push(val))
+            if (array_[thread_local_producter_index_][i]->Push(val))
             {
-                std::cout << "producter_index[" << thread_local_producter_index_-1 << "] ==> val[" << val << "]==> consumer_index[" << i << "]" << std::endl;
+                std::cout << "producter_index[" << thread_local_producter_index_ << "] ==> val[" << val << "]==> consumer_index[" << i << "]" << std::endl;
                 return true;
             }
         }
@@ -79,11 +88,19 @@ public:
             }
         }
         size_t cur_producter_num = producter_num_;
+        if (cur_producter_num == 0)
+        {
+            if (array_[0][thread_local_consumer_index_]->Pop(ptr))
+            {
+                std::cout << "consumer_index[" << thread_local_consumer_index_ << "] <== val[" << *ptr << "] <== producter_index[" << 0 << "]" << std::endl;
+                return true;
+            }
+        }
         for (int i = 0; i < cur_producter_num; ++i)
         {
-            if (array_[i][thread_local_consumer_index_-1]->Pop(ptr))
+            if (array_[i][thread_local_consumer_index_]->Pop(ptr))
             {
-                std::cout << "consumer_index[" << thread_local_consumer_index_-1 << "] <== val[" << *ptr << "] <== producter_index[" << i << "]" << std::endl;
+                std::cout << "consumer_index[" << thread_local_consumer_index_ << "] <== val[" << *ptr << "] <== producter_index[" << i << "]" << std::endl;
                 return true;
             }
         }
