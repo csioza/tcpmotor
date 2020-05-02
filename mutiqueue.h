@@ -51,20 +51,20 @@ public:
             }
             return false;
         }
-        for (int i = 0; i < cur_consumer_num; ++i)
-        {
-            if (array_[thread_local_producter_index_][i]->Push(val))
-            {
-                std::cout << "producter_index[" << thread_local_producter_index_ << "] ==> val[" << val << "]==> consumer_index[" << i << "]" << std::endl;
-                return true;
-            }
-        }
-        
-        return false;
+        // for (int i = 0; i < cur_consumer_num; ++i)
+        // {
+        //     if (array_[thread_local_producter_index_][i]->Push(val))
+        //     {
+        //         std::cout << "producter_index[" << thread_local_producter_index_ << "] ==> val[" << val << "]==> consumer_index[" << i << "]" << std::endl;
+        //         return true;
+        //     }
+        // }
+        // return false;
+
         int aim_index   = 0;
         int min_size    = 100000000;
         int max_step    = 0;
-        for (int i = 0; i < max_len_ && max_step < 3; ++i)
+        for (int i = 0; i < cur_consumer_num && max_step < 3; ++i)
         {
             int cur     = array_[thread_local_producter_index_][i]->used_size();
             if (cur < min_size)
@@ -74,8 +74,14 @@ public:
                 max_step++;
             }
         }
-        std::cout << "thread_local_producter_index_= " << thread_local_producter_index_ << ", val=" << val << ", aim_index=" << aim_index << ", min_size=" << min_size << ", max_step=" << max_step << std::endl;
-        return array_[thread_local_producter_index_][aim_index]->Push(val);//TOTO:算法优化
+        if (array_[thread_local_producter_index_][aim_index]->Push(val))
+        {
+            std::cout << "producter_index[" << thread_local_producter_index_ << "] ==> val[" << val << "]==> consumer_index[" << aim_index << "]" << std::endl;
+            return true;
+        }
+        return false;
+        // std::cout << "thread_local_producter_index_= " << thread_local_producter_index_ << ", val=" << val << ", aim_index=" << aim_index << ", min_size=" << min_size << ", max_step=" << max_step << std::endl;
+        // return array_[thread_local_producter_index_][aim_index]->Push(val);//TOTO:算法优化
     }
     bool Pop(T* ptr) {
         if (thread_local_consumer_index_ == INVALID_NUM)
