@@ -143,17 +143,34 @@ int main(int argc, char *argv[])
     // if (signal(SIGINT, stop) == SIG_ERR) {
     //     return 0;
     // }
-    MutiQueue<int> queue(10,1000);
-    for (int i = 0; i < 10; ++i)
+    MutiQueue<int> *queue = new MutiQueue<int>(6,100);
+    for (int i = 0; i < 3; ++i)
     {
-        queue.Push(i);
+        auto a = std::thread([=](){
+            for (int j = 0; j < 3; ++j)
+            {
+                queue->Push(i*100+j);
+            }
+        });
+        a.join();
+        //queue->Push(i);
     }
-    for (int i = 0; i < 10; ++i)
+    //usleep(100);
+    for (int i = 0; i < 2; ++i)
     {
-        int j = 0;
-        queue.Pop(&j);
-        std::cout << j << std::endl;
+        auto a = std::thread([=](){
+            for (int j = 0; j < 7; ++j)
+            {
+                int m = 10000;
+                if (queue->Pop(&m))
+                {
+                    //std::cout << m << std::endl;
+                }
+            }
+        });
+        a.join();
     }
+    std::cout << queue->size() << std::endl;
     // if (argc != 6)
     // {
     //     printf("port\n");
@@ -166,10 +183,10 @@ int main(int argc, char *argv[])
     // server->SetRecvHandler(handler);
     // server->Run();
 
-    // while(1)
-    // {
-    //     usleep(1000000);
-    // }
+    while(1)
+    {
+        usleep(1000000);
+    }
 
     // server->Stop();
     // delete server;
