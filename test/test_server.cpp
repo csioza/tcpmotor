@@ -144,32 +144,37 @@ int main(int argc, char *argv[])
     //     return 0;
     // }
     MutiQueue<int> *queue = new MutiQueue<int>(6,100);
-    for (int i = 0; i < 2; ++i)
+    for (int i = 0; i < 5; ++i)
     {
         auto a = std::thread([=](){
-            for (int j = 0; j < 9; ++j)
+            if (i % 2 == 0)
             {
-                int m = 10000;
-                if (queue->Pop(&m))
+                for (int j = 0; j < 100; ++j)
                 {
-                    //std::cout << m << std::endl;
+                    int m = 10000;
+                    if (queue->Pop(&m))
+                    {
+                        //std::cout << m << std::endl;
+                    }
                 }
-                usleep(100000);
             }
-        });
-        a.join();
-    }
-    for (int i = 0; i < 3; ++i)
-    {
-        auto a = std::thread([=](){
-            for (int j = 0; j < 3; ++j)
+            else
             {
-                queue->Push(i*100+j);
+                for (int j = 0; j < 3; ++j)
+                {
+                    queue->Push(i*100+j);
+                }
             }
         });
         a.join();
-        //queue->Push(i);
     }
+    // for (int i = 0; i < 3; ++i)
+    // {
+    //     auto a = std::thread([=](){
+    //     });
+    //     a.join();
+    //     //queue->Push(i);
+    // }
     //usleep(100);
     std::cout << queue->size() << std::endl;
     // if (argc != 6)
