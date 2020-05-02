@@ -9,6 +9,9 @@ test/c
 test/tcpmotor.h
 test/tcpmotor2.h
 test/concurrentqueue.h
+test/concurrentqueue2.h
+test/onequeue.h
+test/mutiqueue.h
 o/
 emit/
 *.out

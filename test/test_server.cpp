@@ -1,6 +1,7 @@
 #include "tcpmotor2.h"
 #include <signal.h>
 
+#include "mutiqueue.h"
 
 static long long failed_num = 0;
 static long long all_num = 0;
@@ -142,26 +143,36 @@ int main(int argc, char *argv[])
     // if (signal(SIGINT, stop) == SIG_ERR) {
     //     return 0;
     // }
-
-    if (argc != 6)
+    MutiQueue<int> queue(10,1000);
+    for (int i = 0; i < 10; ++i)
     {
-        printf("port\n");
+        queue.Push(i);
     }
-
-    int port = atoi(argv[1]);
-
-    dcore::TcpMotor *server = new dcore::TcpMotor(port, 3);
-    dcore::TcpRecvHandler * handler = new TestTcpRecvHandler();
-    server->SetRecvHandler(handler);
-    server->Run();
-
-    while(1)
+    for (int i = 0; i < 10; ++i)
     {
-        usleep(1000000);
+        int j = 0;
+        queue.Pop(&j);
+        std::cout << j << std::endl;
     }
+    // if (argc != 6)
+    // {
+    //     printf("port\n");
+    // }
 
-    server->Stop();
-    delete server;
+    // int port = atoi(argv[1]);
+
+    // dcore::TcpMotor *server = new dcore::TcpMotor(port, 3);
+    // dcore::TcpRecvHandler * handler = new TestTcpRecvHandler();
+    // server->SetRecvHandler(handler);
+    // server->Run();
+
+    // while(1)
+    // {
+    //     usleep(1000000);
+    // }
+
+    // server->Stop();
+    // delete server;
 
     return 0;
 }

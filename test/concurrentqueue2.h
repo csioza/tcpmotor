@@ -344,7 +344,11 @@ struct ConsumerToken
 	explicit ConsumerToken(BlockingConcurrentQueue<T, Traits>& q);
 	
 	ConsumerToken(ConsumerToken&& other) 
-		: initialOffset(other.initialOffset), lastKnownGlobalOffset(other.lastKnownGlobalOffset), itemsConsumedFromCurrent(other.itemsConsumedFromCurrent), currentProducer(other.currentProducer), desiredProducer(other.desiredProducer)
+		: initialOffset(other.initialOffset), 
+		lastKnownGlobalOffset(other.lastKnownGlobalOffset), 
+		itemsConsumedFromCurrent(other.itemsConsumedFromCurrent), 
+		currentProducer(other.currentProducer), 
+		desiredProducer(other.desiredProducer)
 	{
 	}
 	
@@ -369,7 +373,6 @@ struct ConsumerToken
 
 private:
 	template<typename T, typename Traits> friend class ConcurrentQueue;
-	friend class ConcurrentQueueTests;
 	
 private: // but shared with ConcurrentQueue
 	std::uint32_t initialOffset;
@@ -383,7 +386,6 @@ private: // but shared with ConcurrentQueue
 // See http://stackoverflow.com/questions/4492062/why-does-a-c-friend-class-need-a-forward-declaration-only-in-other-namespaces
 template<typename T, typename Traits>
 inline void swap(typename ConcurrentQueue<T, Traits>::ImplicitProducerKVP& a, typename ConcurrentQueue<T, Traits>::ImplicitProducerKVP& b);
-
 
 template<typename T, typename Traits = ConcurrentQueueDefaultTraits>
 class ConcurrentQueue
@@ -943,7 +945,6 @@ private:
 	friend struct ExplicitProducer;
 	struct ImplicitProducer;
 	friend struct ImplicitProducer;
-	friend class ConcurrentQueueTests;
 		
 	enum AllocationMode { CanAlloc, CannotAlloc };
 	
