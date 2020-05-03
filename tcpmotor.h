@@ -28,7 +28,7 @@
 #include <signal.h>
 //
 
-//#define USE_MATRIX_QUEUE    1
+#define USE_MATRIX_QUEUE
 #ifdef USE_MATRIX_QUEUE
 #include "matrixqueue.h"
 #else
@@ -440,13 +440,14 @@ public:
         }
         link->mTrigger  = this;
         link->mMotor    = mMotor;
+        std::atomic_thread_fence(std::memory_order_acquire);
         if (EventNotify())
         {
-            //std::cout << "PushLink!" << std::endl;
+            std::cout << "PushLink!" << std::endl;
         }
         else
         {
-            //std::cout << "PushLink err" << std::endl;
+            std::cout << "PushLink err" << std::endl;
         }
 
         return 0;
@@ -470,7 +471,7 @@ public:
     }
     bool EventNotify()
     {
-        uint64 data;
+        uint64 data = 1;//被坑了一晚上，没有赋值
         int result = write(mDriveFd, &data, sizeof(uint64));
         if (result < 0 && errno != EAGAIN)
             return false;
@@ -655,7 +656,7 @@ private:
                 else
                     mLinkTimer.push(std::make_pair(now + LINK_ACTIVE_TIMEOUT, it->second->mKey));
             }
-            //std::cout << "CheckLinkActive=" << mLinkTimer.top().second << std::endl;
+            std::cout << "CheckLinkActive=" << mLinkTimer.top().second << std::endl;
             mLinkTimer.pop();
         }
         return resent;

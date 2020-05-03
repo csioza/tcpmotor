@@ -6,8 +6,7 @@
 #define INVALID_NUM         -1
 #define MAX_STEP            3
 #define MAX_MATRIX_QUEUE    100
-static thread_local std::vector<int> thread_local_producter_index_(MAX_MATRIX_QUEUE, INVALID_NUM);
-static thread_local std::vector<int> thread_local_consumer_index_(MAX_MATRIX_QUEUE, INVALID_NUM);
+
 template <typename T>
 class MatrixQueue {
 public:
@@ -67,12 +66,12 @@ public:
         }
         if (array_[thread_local_producter_index_[id_]][aim_index]->Push(val))
         {
-            std::cout << "id_=" << id_ << ", producter_index[" << thread_local_producter_index_[id_] << "] ==> val[" << val 
-                    << "]==> consumer_index[" << aim_index << "]" << ", cur_consumer_num[" << cur_consumer_num << "]" << std::endl;
+            // std::cout << "id_=" << id_ << ", producter_index[" << thread_local_producter_index_[id_] << "] ==> val[" << val 
+            //         << "]==> consumer_index[" << aim_index << "]" << ", cur_consumer_num[" << cur_consumer_num << "]" << std::endl;
             return true;
         }
-        std::cout << "id_=" << id_ << ", producter_index[" << thread_local_producter_index_[id_] << "] =/=> val[" << val 
-                << "]=/=> consumer_index[" << aim_index << "]" << ", cur_consumer_num[" << cur_consumer_num << "]" << std::endl;
+        // std::cout << "id_=" << id_ << ", producter_index[" << thread_local_producter_index_[id_] << "] =/=> val[" << val 
+        //         << "]=/=> consumer_index[" << aim_index << "]" << ", cur_consumer_num[" << cur_consumer_num << "]" << std::endl;
         return false;
     }
     bool Pop(T& ptr) {
@@ -107,13 +106,13 @@ public:
         }
         if (array_[aim_index][thread_local_consumer_index_[id_]]->Pop(ptr))
         {
-            std::cout << "id_=" << id_ << ", consumer_index[" << thread_local_consumer_index_[id_] << "] <== val[" << ptr 
-                    << "] <== producter_index[" << aim_index << "]" << ", cur_producter_num[" << cur_producter_num<< "]" << std::endl;
+            // std::cout << "id_=" << id_ << ", consumer_index[" << thread_local_consumer_index_[id_] << "] <== val[" << ptr 
+            //         << "] <== producter_index[" << aim_index << "]" << ", cur_producter_num[" << cur_producter_num<< "]" << std::endl;
             return true;
         }
-        std::cout << "id_=" << id_ << ", consumer_index[" << thread_local_consumer_index_[id_] << "] <=/= val[" << ptr 
-                << "] <=/= producter_index[" << aim_index << "]" << ", cur_producter_num[" << cur_producter_num<< "]" << std::endl;
-        return false;
+        // std::cout << "id_=" << id_ << ", consumer_index[" << thread_local_consumer_index_[id_] << "] <=/= val[" << ptr 
+        //         << "] <=/= producter_index[" << aim_index << "]" << ", cur_producter_num[" << cur_producter_num<< "]" << std::endl;
+        // return false;
     }
     inline size_t size() {
         size_t res = 0;
@@ -131,6 +130,11 @@ private:
     std::atomic<size_t> id_;
     static std::atomic<size_t> matrix_queue_index_;
     OneQueue<T>*** array_;
+    static thread_local std::vector<int> thread_local_producter_index_;
+    static thread_local std::vector<int> thread_local_consumer_index_;
 };
 
 template <typename T> std::atomic<size_t> MatrixQueue<T>::matrix_queue_index_(0);
+template <typename T> thread_local std::vector<int> MatrixQueue<T>::thread_local_producter_index_(MAX_MATRIX_QUEUE, INVALID_NUM);
+template <typename T> thread_local std::vector<int> MatrixQueue<T>::thread_local_consumer_index_(MAX_MATRIX_QUEUE, INVALID_NUM);
+

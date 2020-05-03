@@ -185,7 +185,7 @@ int main(int argc, char *argv[])
 
     int port = atoi(argv[1]);
 
-    dcore::TcpMotor *server = new dcore::TcpMotor(port, 2);
+    dcore::TcpMotor *server = new dcore::TcpMotor(port, 3);
     dcore::TcpRecvHandler * handler = new TestTcpRecvHandler();
     server->SetRecvHandler(handler);
     server->Run();
