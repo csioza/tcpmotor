@@ -14,6 +14,7 @@
 #include <thread>
 //linux
 #include <sys/epoll.h>
+#include <sys/eventfd.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <netinet/tcp.h>
@@ -26,7 +27,13 @@
 #include <sys/time.h>
 #include <signal.h>
 //
+
+//#define USE_MATRIX_QUEUE    1
+#ifdef USE_MATRIX_QUEUE
+#include "matrixqueue.h"
+#else
 #include "concurrentqueue.h"
+#endif
 
 typedef char                int8;
 typedef short               int16;
@@ -39,14 +46,18 @@ typedef unsigned long long  uint64;
 
 namespace dcore {
 
+#define MAX_TRIGGER_NUM         100
 #define MAX_PACKET_SIZE         8192
 #define MAX_RECBUFF_SIZE        (MAX_PACKET_SIZE * 3)
 #define INVALID                 -1 
 #define MAX_EVENT_NUM           1024
+#define MAX_QUEUE_BIAS          100
 #define INVALID_SOCKET          -1
 #define INT_64_MAX              0x7fffffffffffffff
 #define LINK_ACTIVE_TIMEOUT     3600//秒
-#define MAIN_LOOP_SLEEP         10
+#define EPOLL_WAIT_TIMEOUT      10000//毫秒
+#define MAX_MATRIX_THREAD       32
+#define MAX_MATRIX_QUEUE_SIZE   1000
 
 #pragma pack(1)
 struct Packet  //用于线程的收发队列里
@@ -97,6 +108,10 @@ std::string RandomString(int len)
     std::string result = c;
     return result;
 }
+int Mod(uint64 key, uint64 mod)
+{
+    return key % mod;
+}
 ///////////////////////////////////////////////////////////////////////////////
 //handler class
 ///////////////////////////////////////////////////////////////////////////////
@@ -130,13 +145,13 @@ public:
 class SendPacket
 {
 public:
-    SendPacket(std::string ip, int port, void* data, int len, void* ctx) : mIp(ip), mPort(port), mCtx(ctx)
+    SendPacket(std::string ip, int port, const char* data, int len, void* ctx) : mIp(ip), mPort(port), mCtx(ctx)
     {
         mLen            = len + sizeof(Packet);
         mData           = (char *)malloc(mLen);
         Packet *packet  = (Packet *)mData;
         packet->len     = mLen;
-        memcpy(packet->data, (char *)data, len);
+        memcpy(packet->data, data, len);
     }
     ~SendPacket()
     {
@@ -299,74 +314,92 @@ public:
 //main class
 ///////////////////////////////////////////////////////////////////////////////
 class TcpMotor;
+class Trigger;
+enum LinkType
+{
+    LINK_TYPE_SOCKET = 1,
+    LINK_TYPE_ACCEPT = 2,
+    LINK_TYPE_EVENTS = 3,
+};
 class Link
 {
 public:
-    Link() : mFd(0), mHead(0), mEnd(0), mMotor(nullptr), mLastActiveTime(0)
-    {
-        memset(mBuff, 0, MAX_RECBUFF_SIZE);
-    }
+    Link() : mFd(0), mLastActiveTime(0), mPort(0), mKey(0), mTrigger(nullptr), mMotor(nullptr) {}
     virtual ~Link() {}
-    virtual int OnRecv() {}
-    virtual void UpdateActiveTime(int64 now) { mLastActiveTime = now + LINK_ACTIVE_TIMEOUT; }
+    virtual LinkType Type() = 0;
+    virtual int OnRecv(int64 now, int cnt = 0) = 0;
+    virtual void UpdateActiveTime(int64 now) {}
     //   
     int         mFd;
-    int         mHead;
-    int         mEnd;
-    char        mBuff[MAX_RECBUFF_SIZE];
     int64       mLastActiveTime;
     std::string mIp;//远端ip
     int         mPort;//远端port
     uint64      mKey;//
+    Trigger*    mTrigger;
     TcpMotor*   mMotor;
 };
 class SocketLink : public Link
 {
 public:
-    SocketLink() { mLastActiveTime = TimeUtil::NowTimeS() + LINK_ACTIVE_TIMEOUT; }
+    SocketLink() : mHead(0), mEnd(0)
+    {
+        memset(mBuff, 0, MAX_RECBUFF_SIZE);
+        mLastActiveTime = TimeUtil::NowTimeS() + LINK_ACTIVE_TIMEOUT; 
+    }
     virtual ~SocketLink() {}
-    virtual int OnRecv();
+    virtual LinkType Type() { return LINK_TYPE_SOCKET; };
+    virtual int OnRecv(int64 now, int cnt = 0);
+    virtual void UpdateActiveTime(int64 now) { mLastActiveTime = now + LINK_ACTIVE_TIMEOUT; }
+    int         mHead;
+    int         mEnd;
+    char        mBuff[MAX_RECBUFF_SIZE];
 };
 class AcceptLink : public Link
 {
 public:
     AcceptLink() { mLastActiveTime = INT_64_MAX; }
     virtual ~AcceptLink() {}
-    virtual int OnRecv();
-    virtual void UpdateActiveTime(int64 now) {}
+    virtual int OnRecv(int64 now, int cnt = 0);
+    virtual LinkType Type() { return LINK_TYPE_ACCEPT; };
+    //virtual void UpdateActiveTime(int64 now) {}
 };
-
-class TcpMotor
+class EventsLink : public Link
 {
 public:
-    TcpMotor(int port) : mPort(port), mIsRunning(false), mRecvHandler(nullptr), mSendHandler(nullptr)
+    EventsLink() { mLastActiveTime = INT_64_MAX; }
+    virtual ~EventsLink() {}
+    virtual int OnRecv(int64 now, int cnt = 0);
+    virtual LinkType Type() { return LINK_TYPE_EVENTS; };
+    //virtual void UpdateActiveTime(int64 now) {}
+};
+
+class Trigger
+{
+public:
+    Trigger(TcpMotor *motor) : mMotor(motor), mIsRunning(false)
+#ifdef USE_MATRIX_QUEUE
+            , mSendQueue(MAX_MATRIX_THREAD, MAX_MATRIX_QUEUE_SIZE), mLinkQueue(MAX_MATRIX_THREAD, MAX_MATRIX_QUEUE_SIZE)
+#endif
     {
         mEpollFd        = epoll_create(256);
-        mEvents         = new struct epoll_event[MAX_EVENT_NUM];//(struct epoll_event *)malloc(sizeof(struct epoll_event) * MAX_EVENT_NUM);
+        mEvents         = new struct epoll_event[MAX_EVENT_NUM];
     }
-    ~TcpMotor()
+    ~Trigger()
     {
         delete[] mEvents;
         close(mEpollFd);
-        if (mRecvHandler)
-            delete mRecvHandler;
-        if (mSendHandler)
-            delete mSendHandler;
     }
     void Run()
     {
-        mIsRunning      = true;
-        Link *link      = new AcceptLink();
-        std::string hostname;
-        std::string localip;
-        SocketUtil::GetHostInfo(hostname, localip);
-        link->mFd       = SocketUtil::CreateBindListen(localip, mPort, false);
-        link->mMotor    = this;
-        link->mKey      = SocketUtil::MakeKeyByIpPort(localip, mPort);
+        mIsRunning  = true;
+        std::cout << "Trigger running!" << std::endl;
+        mDriveFd    = eventfd(0, EFD_NONBLOCK);
+        Link *link  = new EventsLink();
+        link->mFd   = mDriveFd;
+        link->mKey  = 0;//注意，个例
         AddLink(link);
-        std::cout << "TcpMotor running!" << std::endl;
-        mThread = std::thread(&TcpMotor::Loop, this);
-        pthread_setname_np(mThread.native_handle(), "TcpMotor-Loop");
+        mThread     = std::thread(&Trigger::Loop, this);
+        pthread_setname_np(mThread.native_handle(), "TcpMotor-Trigger-Loop");
     }
     void Stop()
     {
@@ -376,54 +409,85 @@ public:
         for (auto it : mIpPortLink)
             DelLink(it.second);
     }
-    void SetRecvHandler(TcpRecvHandler* recv) { mRecvHandler = recv; }
-    void SetSendHandler(TcpSendHandler* send) { mSendHandler = send; }
-    void Send(std::string ip, int port, void* data, int len, void* ctx)
-    {
-        SendPacket *packet = new SendPacket(ip, port, data, len, ctx);
-        bool r = mSendQueue.enqueue(packet);
-    }
-    void RecvHandler(std::string callback_ip, int callback_port, void* content, int contentLen)
-    {
-        mRecvHandler->OnRecv(callback_ip, callback_port, (char *)content, contentLen); 
-    }
     int AddLink(Link *link)
     {
-        mIpPortLink[link->mKey] = link;
+        link->mTrigger  = this;
+        link->mMotor    = mMotor;
         struct epoll_event event;
         event.events    = EPOLLIN | EPOLLET;
         event.data.fd   = link->mFd;
         event.data.ptr  = (void *)link;
-        int result = epoll_ctl(mEpollFd, EPOLL_CTL_ADD, link->mFd, &event);
-        mLinkTimer.push(std::make_pair(link->mLastActiveTime, link->mKey));
+        int result = epoll_ctl(mEpollFd, EPOLL_CTL_ADD, link->mFd, &event);//TODO 失败的情况
+        if (link->Type() == LINK_TYPE_SOCKET)
+            mLinkTimer.push(std::make_pair(link->mLastActiveTime, link->mKey));
+        mIpPortLink[link->mKey] = link;
         //std::cout << "AddLink mFd=" << std::to_string(link->mFd) << ", result=" << std::to_string(result) << std::endl;
         return result;
     }
-private:
-    void Loop()
+    int PushLink(Link *link)
     {
-        while (mIsRunning)
+#ifdef USE_MATRIX_QUEUE
+        bool r = mLinkQueue.Push(link);
+#else
+        bool r = mLinkQueue.enqueue(link);
+#endif
+        if (!r)
         {
-            int64 now = TimeUtil::NowTimeS();
-            int cnt = Wait(0);
-            for (int i = 0; i < cnt; ++i)
-            {
-                if (mEvents[i].events & EPOLLIN)
-                {
-                    Link *link = (Link *)mEvents[i].data.ptr;
-                    if (!link)
-                        continue;
-                    link->UpdateActiveTime(now);
-                    if (link->OnRecv() != 0)
-                        DelLink(link);
-                }
-            }
-            cnt  = cnt > 0 ? cnt : 0;
-            cnt += SendHandler(cnt + 1, now);
-            CheckLinkActive(now);
-            //cnt > 0 ? usleep(10) : usleep(1);
-            usleep(MAIN_LOOP_SLEEP);
+            std::cout << "PutLink failed!" << std::endl;
+            delete link;
+            return INVALID;
         }
+        link->mTrigger  = this;
+        link->mMotor    = mMotor;
+        EventNotify();
+
+        return 0;
+    }
+    int PushPacket(SendPacket *packet)
+    {
+#ifdef USE_MATRIX_QUEUE
+        bool r = mSendQueue.Push(packet);
+#else
+        bool r = mSendQueue.enqueue(packet);
+#endif
+        if (!r)
+        {
+            std::cout << "PutPacket failed!" << std::endl;
+            delete packet;
+            return INVALID;
+        }
+        EventNotify();
+
+        return 0;
+    }
+    bool EventNotify()
+    {
+        uint64 data;
+        int result = write(mDriveFd, &data, sizeof(uint64));
+        if (result < 0 && errno != EAGAIN)
+            return false;
+        return (result == sizeof(uint64));
+    }
+    bool EventReset()
+    {
+        uint64 data;
+        int result = read(mDriveFd, &data, sizeof(uint64));
+        if (result < 0 && errno != EAGAIN)
+            return false;
+        return (result == sizeof(uint64));
+    }
+    void AcceptLink()
+    {
+        Link *link = nullptr;
+#ifdef USE_MATRIX_QUEUE
+        for (int i = 0; i < MAX_EVENT_NUM && mLinkQueue.Pop(&link); ++i)
+#else
+        for (int i = 0; i < MAX_EVENT_NUM && mLinkQueue.try_dequeue(link); ++i)
+#endif
+            if (link)
+                AddLink(link);
+            else
+                delete link;
     }
     int SendHandler(int num, int64 now)
     {
@@ -431,7 +495,11 @@ private:
         for (int i = 0; i < num; ++i)
         {
             SendPacket *packet = nullptr;
+#ifdef USE_MATRIX_QUEUE
+            bool result = mSendQueue.Pop(&packet);
+#else
             bool result = mSendQueue.try_dequeue(packet);
+#endif
             if (!result || !packet)
                 return send_num;
             auto key    = SocketUtil::MakeKeyByIpPort(packet->mIp, packet->mPort);
@@ -446,7 +514,6 @@ private:
                 link->mFd           = sfd;
                 link->mIp           = packet->mIp;
                 link->mPort         = packet->mPort;
-                link->mMotor        = this;
                 link->mKey          = key;
                 AddLink(link);
             }
@@ -465,18 +532,18 @@ private:
                 {
                     gone_len += n;
                     want_len -= n;
-                    //if (want_len > 0)
-                        //printf("Sent Half Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d]\n", 
-                        //    link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n);
+                    // if (want_len > 0)
+                    //     printf("Sent Half Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d]\n", 
+                    //        link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n);
                 }
                 else
                 {
-                    //printf("Sent failed Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d]\n", 
+                    // printf("Sent failed Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d]\n", 
                     //    link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n);
-                    if (fail_num++ < 3)
+                    if (fail_num++ < 2)
                     {
-                        //printf("Sent failed Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d], fail_num[%d]\n", 
-                        //    link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n, fail_num);
+                        printf("Sent failed Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d], fail_num[%d]\n", 
+                           link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n, fail_num);
                         usleep(1);
                     }
                     else
@@ -490,6 +557,41 @@ private:
             delete packet;
         }
         return send_num;
+    }
+private:
+    void Loop()
+    {
+        int wait_time = 0;
+        while (mIsRunning)
+        {
+            int cnt = Wait(wait_time);
+            int64 now = TimeUtil::NowTimeS();
+            for (int i = 0; i < cnt; ++i)
+            {
+                if (mEvents[i].events & EPOLLIN)
+                {
+                    Link *link = (Link *)mEvents[i].data.ptr;
+                    if (!link)
+                        continue;
+                    link->UpdateActiveTime(now);
+                    if (link->OnRecv(now, cnt) != 0)
+                        DelLink(link);
+                }
+            }
+#ifdef USE_MATRIX_QUEUE
+            if (mSendQueue.size() > 0 || mLinkQueue.size() > 0)
+#else
+            if (mSendQueue.size_approx() > 0 || mLinkQueue.size_approx() > 0)
+#endif
+            {
+                wait_time = 0;
+            }
+            else
+            {
+                wait_time = CheckLinkActive(now);
+                wait_time = wait_time > EPOLL_WAIT_TIMEOUT ? EPOLL_WAIT_TIMEOUT : wait_time;
+            }
+        }
     }
     int DelLink(Link *link)
     {
@@ -515,10 +617,16 @@ private:
     {
         return epoll_wait(mEpollFd, mEvents, MAX_EVENT_NUM, timeout);
     }
-    void CheckLinkActive(int64 now)
+    int CheckLinkActive(int64 now)
     {
-        while(!mLinkTimer.empty() && mLinkTimer.top().first <= now)
+        int resent = EPOLL_WAIT_TIMEOUT;
+        while(!mLinkTimer.empty())
         {
+            if (mLinkTimer.top().first > now)
+            {
+                resent = (mLinkTimer.top().first - now) * 1000;
+                break;
+            }
             auto it = mIpPortLink.find(mLinkTimer.top().second);
             if (it != mIpPortLink.end() && it->second)
             {
@@ -530,23 +638,97 @@ private:
             //std::cout << "CheckLinkActive=" << mLinkTimer.top().second << std::endl;
             mLinkTimer.pop();
         }
+        return resent;
     }
 private:
     int                     mPort;
     bool                    mIsRunning;
-    TcpRecvHandler*         mRecvHandler;
-    TcpSendHandler*         mSendHandler;
     int                     mEpollFd;
-    struct epoll_event      *mEvents;
+    struct epoll_event*     mEvents;
     std::thread             mThread;
     std::unordered_map<uint64, Link*>           mIpPortLink;
+#ifdef USE_MATRIX_QUEUE
+    MatrixQueue<SendPacket*>                    mSendQueue;
+    MatrixQueue<Link*>                          mLinkQueue;
+#else
     moodycamel::ConcurrentQueue<SendPacket*>    mSendQueue;
+    moodycamel::ConcurrentQueue<Link*>          mLinkQueue;
+#endif
+    TcpMotor*               mMotor;
+    int                     mDriveFd;//eventfd 用于接收连接和发送数据，避免线程空跑
     //
     using Pair = std::pair<int64, uint64>;
     struct cmp { bool operator() (const Pair &a, const Pair &b) { return a.first > b.first; } };
     std::priority_queue<Pair, std::vector<Pair>, cmp> mLinkTimer;
 };
-int SocketLink::OnRecv()
+
+class TcpMotor
+{
+public:
+    TcpMotor(int port, int trigger_num) : mPort(port), mRecvHandler(nullptr), mSendHandler(nullptr), mAutoInc(0)
+    {
+        mTriggerNum = trigger_num > MAX_TRIGGER_NUM ? MAX_TRIGGER_NUM : trigger_num;
+        for (int i = 0; i < mTriggerNum; ++i)
+            mTriggers[i] = new Trigger(this);
+    }
+    ~TcpMotor()
+    {
+        for (int i = 0; i < mTriggerNum; ++i)
+        {
+            delete mTriggers[i];
+        }
+        if (mRecvHandler)
+            delete mRecvHandler;
+        if (mSendHandler)
+            delete mSendHandler;
+    }
+    void Run()
+    {
+        std::cout << "TcpMotor running!" << std::endl;
+        Link *link      = new AcceptLink();
+        std::string hostname;
+        std::string localip;
+        SocketUtil::GetHostInfo(hostname, localip);
+        link->mFd       = SocketUtil::CreateBindListen(localip, mPort, false);
+        link->mKey      = SocketUtil::MakeKeyByIpPort(localip, mPort);
+        for (int i = 0; i < mTriggerNum; ++i)
+            mTriggers[i]->Run();
+        mTriggers[0]->PushLink(link);
+    }
+    void Stop()
+    {
+        for (int i = 0; i < mTriggerNum; ++i)
+            mTriggers[i]->Stop();
+    }
+    void SetRecvHandler(TcpRecvHandler* recv) { mRecvHandler = recv; }
+    void SetSendHandler(TcpSendHandler* send) { mSendHandler = send; }
+    void Send(std::string ip, int port, const char* data, int len, void* ctx)
+    {
+        SendPacket *packet = new SendPacket(ip, port, data, len, ctx);
+        //auto trigger = mTriggers[Mod(SocketUtil::MakeKeyByIpPort(ip, port), mTriggerNum)];
+        auto trigger = mTriggers[Mod(mAutoInc++, mTriggerNum)];
+        trigger->PushPacket(packet);
+    }
+    int AddLink(Link *link)
+    {
+        auto trigger = mTriggers[Mod(link->mKey, mTriggerNum)];
+        return trigger->PushLink(link);
+    }
+    void RecvHandler(std::string &ip, int port, void* content, int contentLen)
+    {
+        mRecvHandler->OnRecv(ip, port, (char *)content, contentLen); 
+    }
+private:
+    int                     mPort;
+    TcpRecvHandler*         mRecvHandler;
+    TcpSendHandler*         mSendHandler;
+    Trigger*                mTriggers[MAX_TRIGGER_NUM];
+    int                     mTriggerNum;
+    //
+    std::atomic<int>        mAutoInc;
+};
+
+int SocketLink::OnRecv(int64 now, int cnt)
 {
     int result = 0;
     while (1)
@@ -643,7 +825,7 @@ int SocketLink::OnRecv()
     }
     return result;
 }
-int AcceptLink::OnRecv()
+int AcceptLink::OnRecv(int64 now, int cnt)
 {
     while (1)
     {
@@ -664,15 +846,22 @@ int AcceptLink::OnRecv()
         }
         if (SocketUtil::Nonblock(socket_fd) < 0)
             continue;
-        //std::cout << "Accepted connection (ip=" << ip << ", port=" << port << ", socket_fd=" << std::to_string(socket_fd) << ")" << std::endl;    
+        std::cout << "Accepted connection (ip=" << ip << ", port=" << port << ", socket_fd=" << std::to_string(socket_fd) << ")" << std::endl;    
         Link *new_link      = new SocketLink();
         new_link->mFd       = socket_fd;
-        new_link->mMotor    = mMotor;
         new_link->mIp       = ip;
         new_link->mPort     = atoi(port);
         new_link->mKey      = SocketUtil::MakeKeyByIpPort(new_link->mIp, new_link->mPort);
         mMotor->AddLink(new_link);
     }
+    return 0;
+}
+int EventsLink::OnRecv(int64 now, int cnt)
+{
+    mTrigger->EventReset();
+    mTrigger->AcceptLink();
+    cnt  = cnt > 0 ? cnt : 0;
+    mTrigger->SendHandler(cnt + 1, now);
     return 0;
 }
 } //namespace dcore

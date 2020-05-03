@@ -11,7 +11,7 @@ test/tcpmotor2.h
 test/concurrentqueue.h
 test/concurrentqueue2.h
 test/onequeue.h
-test/mutiqueue.h
+test/matrixqueue.h
 o/
 emit/
 *.out

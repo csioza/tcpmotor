@@ -1,8 +1,6 @@
-#include "tcpmotor2.h"
+#include "tcpmotor.h"
 #include <signal.h>
-
-#include "mutiqueue.h"
-
+// usingnamespace dcore;
 static long long failed_num = 0;
 static long long all_num = 0;
 static void stop(int signo)
@@ -143,51 +141,52 @@ int main(int argc, char *argv[])
     // if (signal(SIGINT, stop) == SIG_ERR) {
     //     return 0;
     // }
-    MutiQueue<int> *queue = new MutiQueue<int>(6,100);
-    for (int i = 0; i < 5; ++i)
-    {
-        auto a = std::thread([=](){
-            if (i % 2 == 0)
-            {
-                for (int j = 0; j < 100; ++j)
-                {
-                    int m = 10000;
-                    if (queue->Pop(&m))
-                    {
-                        //std::cout << m << std::endl;
-                    }
-                }
-            }
-            else
-            {
-                for (int j = 0; j < 3; ++j)
-                {
-                    queue->Push(i*100+j);
-                }
-            }
-        });
-        a.join();
-    }
-    // for (int i = 0; i < 3; ++i)
+    // MutiQueue<int> *queue = new MutiQueue<int>(6,100);
+    // for (int i = 0; i < 6; ++i)
     // {
     //     auto a = std::thread([=](){
+    //         if (i % 2 == 0)
+    //         {
+    //             for (int j = 0; j < 2; ++j)
+    //             {
+    //                 queue->Push(j);
+    //             }
+    //         }
+    //         else
+    //         {
+    //             for (int j = 0; j < 10; ++j)
+    //             {
+    //                 int m = 10000;
+    //                 if (queue->Pop(&m))
+    //                 {
+    //                     //std::cout << m << std::endl;
+    //                 }
+    //                 //usleep(1000000);
+    //             }
+    //         }
     //     });
     //     a.join();
-    //     //queue->Push(i);
     // }
-    //usleep(100);
-    std::cout << queue->size() << std::endl;
+    // // for (int i = 0; i < 3; ++i)
+    // // {
+    // //     auto a = std::thread([=](){
+    // //     });
+    // //     a.join();
+    // //     //queue->Push(i);
+    // // }
+    // //usleep(100);
+    // std::cout << queue->size() << std::endl;
     // if (argc != 6)
     // {
     //     printf("port\n");
     // }
 
-    // int port = atoi(argv[1]);
+    int port = atoi(argv[1]);
 
-    // dcore::TcpMotor *server = new dcore::TcpMotor(port, 3);
-    // dcore::TcpRecvHandler * handler = new TestTcpRecvHandler();
-    // server->SetRecvHandler(handler);
-    // server->Run();
+    dcore::TcpMotor *server = new dcore::TcpMotor(port, 3);
+    dcore::TcpRecvHandler * handler = new TestTcpRecvHandler();
+    server->SetRecvHandler(handler);
+    server->Run();
 
     while(1)
     {
