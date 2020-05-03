@@ -208,7 +208,7 @@ int main(int argc, char *argv[])
         // count++;
         // usleep(1);
         // server->Send(ip, port, content, data.size(), NULL);
-        if (count % 100000 == 0)
+        if (count % 10000 == 0)
         {
             printf("send packet num %d\n",count);
         }

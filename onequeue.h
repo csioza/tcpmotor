@@ -13,31 +13,31 @@ public:
     bool Push(const T& val) { 
         if (free_size() <= 0)
             return false;
-        size_t tail = tail_.load(std::memory_order_relaxed);
+        size_t tail = tail_.load(std::memory_order_acquire);// memory_order_relaxed memory_order_acquire
         array_[tail++] = val;
         if (tail >= qlen_)
             tail -= qlen_;
-        tail_.store(tail, std::memory_order_relaxed);
+        tail_.store(tail, std::memory_order_release);//memory_order_release
         return true;
     }
-    bool Pop(T* ptr) {
+    bool Pop(T& ptr) {
         if (used_size() <= 0)
             return false;
-        size_t head = head_.load(std::memory_order_relaxed);
-        *ptr = std::move(array_[head++]);
+        size_t head = head_.load(std::memory_order_acquire);
+        ptr = std::move(array_[head++]);
         if (head >= qlen_)
             head -= qlen_;
-        head_.store(head, std::memory_order_relaxed);
+        head_.store(head, std::memory_order_release);
         return true;
     }
     inline size_t used_size() {
-        size_t head = head_.load(std::memory_order_relaxed);
-        size_t tail = tail_.load(std::memory_order_relaxed);
+        size_t head = head_.load(std::memory_order_acquire);
+        size_t tail = tail_.load(std::memory_order_acquire);
         return (tail >= head) ? (tail - head) : (tail + qlen_ - head);
     }
     inline size_t free_size() {
-        size_t head = head_.load(std::memory_order_relaxed);
-        size_t tail = tail_.load(std::memory_order_relaxed);
+        size_t head = head_.load(std::memory_order_acquire);
+        size_t tail = tail_.load(std::memory_order_acquire);
         return (head > tail) ? (head - 1 - tail) : (head - 1 + qlen_ - tail);
     }
 private:

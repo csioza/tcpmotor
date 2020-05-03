@@ -141,49 +141,51 @@ int main(int argc, char *argv[])
     // if (signal(SIGINT, stop) == SIG_ERR) {
     //     return 0;
     // }
-    // MutiQueue<int> *queue = new MutiQueue<int>(6,100);
-    // for (int i = 0; i < 6; ++i)
+
+
+    // const int thread_num = 8;
+    // MatrixQueue<int> *queue = new MatrixQueue<int>(32,1000);
+    // std::thread t[thread_num];
+    // for (int i = 0; i < thread_num; ++i)
     // {
-    //     auto a = std::thread([=](){
+    //     t[i] = std::thread([=](){
     //         if (i % 2 == 0)
     //         {
-    //             for (int j = 0; j < 2; ++j)
+    //             for (int j = 0; j < 100; ++j)
     //             {
-    //                 queue->Push(j);
+    //                 queue->Push(i * 100 + j);
     //             }
     //         }
     //         else
     //         {
-    //             for (int j = 0; j < 10; ++j)
+    //             //while(true)
+    //             for (int j = 0; j < 200; ++j)
     //             {
     //                 int m = 10000;
-    //                 if (queue->Pop(&m))
+    //                 if (queue->Pop(m))
     //                 {
     //                     //std::cout << m << std::endl;
     //                 }
-    //                 //usleep(1000000);
+    //                 usleep(1000);
     //             }
     //         }
     //     });
-    //     a.join();
+    //     //a.detach();
     // }
-    // // for (int i = 0; i < 3; ++i)
-    // // {
-    // //     auto a = std::thread([=](){
-    // //     });
-    // //     a.join();
-    // //     //queue->Push(i);
-    // // }
-    // //usleep(100);
-    // std::cout << queue->size() << std::endl;
-    // if (argc != 6)
+    // for (int i = 0; i < thread_num; ++i)
     // {
-    //     printf("port\n");
+    //     t[i].join();
+    // }
+    // usleep(1000000);
+    // std::cout << queue->size() << std::endl;
+    // while(1)
+    // {
+    //     usleep(1000000);
     // }
 
     int port = atoi(argv[1]);
 
-    dcore::TcpMotor *server = new dcore::TcpMotor(port, 3);
+    dcore::TcpMotor *server = new dcore::TcpMotor(port, 2);
     dcore::TcpRecvHandler * handler = new TestTcpRecvHandler();
     server->SetRecvHandler(handler);
     server->Run();
@@ -193,8 +195,8 @@ int main(int argc, char *argv[])
         usleep(1000000);
     }
 
-    // server->Stop();
-    // delete server;
+    server->Stop();
+    delete server;
 
     return 0;
 }

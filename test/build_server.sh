@@ -6,6 +6,7 @@ sed -i "s/client/server/g" "./CMakeLists.txt"
 sed -i "s/TEST_CPP/test_server.cpp/g" "./CMakeLists.txt"
 sed -i "s/test_client.cpp/test_server.cpp/g" "./CMakeLists.txt"
 
+rm -rf *.h
 cp ../*.h ./
 
 rm -rf server

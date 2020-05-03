@@ -57,7 +57,7 @@ namespace dcore {
 #define LINK_ACTIVE_TIMEOUT     3600//秒
 #define EPOLL_WAIT_TIMEOUT      10000//毫秒
 #define MAX_MATRIX_THREAD       32
-#define MAX_MATRIX_QUEUE_SIZE   1000
+#define MAX_MATRIX_QUEUE_SIZE   50000
 
 #pragma pack(1)
 struct Packet  //用于线程的收发队列里
@@ -377,12 +377,13 @@ class Trigger
 {
 public:
     Trigger(TcpMotor *motor) : mMotor(motor), mIsRunning(false)
-#ifdef USE_MATRIX_QUEUE
-            , mSendQueue(MAX_MATRIX_THREAD, MAX_MATRIX_QUEUE_SIZE), mLinkQueue(MAX_MATRIX_THREAD, MAX_MATRIX_QUEUE_SIZE)
-#endif
     {
         mEpollFd        = epoll_create(256);
         mEvents         = new struct epoll_event[MAX_EVENT_NUM];
+#ifdef USE_MATRIX_QUEUE
+        mSendQueue      = new MatrixQueue<SendPacket*>(MAX_MATRIX_THREAD, MAX_MATRIX_QUEUE_SIZE);
+        mLinkQueue      = new MatrixQueue<Link*>(MAX_MATRIX_THREAD, MAX_MATRIX_QUEUE_SIZE);
+#endif
     }
     ~Trigger()
     {
@@ -421,13 +422,13 @@ public:
         if (link->Type() == LINK_TYPE_SOCKET)
             mLinkTimer.push(std::make_pair(link->mLastActiveTime, link->mKey));
         mIpPortLink[link->mKey] = link;
-        //std::cout << "AddLink mFd=" << std::to_string(link->mFd) << ", result=" << std::to_string(result) << std::endl;
+        std::cout << "AddLink mFd=" << std::to_string(link->mFd) << ", type=" << link->Type() << ", result=" << std::to_string(result) << std::endl;
         return result;
     }
     int PushLink(Link *link)
     {
 #ifdef USE_MATRIX_QUEUE
-        bool r = mLinkQueue.Push(link);
+        bool r = mLinkQueue->Push(link);
 #else
         bool r = mLinkQueue.enqueue(link);
 #endif
@@ -439,14 +440,21 @@ public:
         }
         link->mTrigger  = this;
         link->mMotor    = mMotor;
-        EventNotify();
+        if (EventNotify())
+        {
+            //std::cout << "PushLink!" << std::endl;
+        }
+        else
+        {
+            //std::cout << "PushLink err" << std::endl;
+        }
 
         return 0;
     }
     int PushPacket(SendPacket *packet)
     {
 #ifdef USE_MATRIX_QUEUE
-        bool r = mSendQueue.Push(packet);
+        bool r = mSendQueue->Push(packet);
 #else
         bool r = mSendQueue.enqueue(packet);
 #endif
@@ -479,15 +487,26 @@ public:
     void AcceptLink()
     {
         Link *link = nullptr;
+        for (int i = 0; i < MAX_EVENT_NUM; ++i)
+        {
 #ifdef USE_MATRIX_QUEUE
-        for (int i = 0; i < MAX_EVENT_NUM && mLinkQueue.Pop(&link); ++i)
+            if (mLinkQueue->Pop(link))
 #else
-        for (int i = 0; i < MAX_EVENT_NUM && mLinkQueue.try_dequeue(link); ++i)
+            if (mLinkQueue.try_dequeue(link))
 #endif
-            if (link)
-                AddLink(link);
+            {
+                //std::cout << "AcceptLink=" << link << ", " << link->mKey << std::endl;
+                if (link)
+                    AddLink(link);
+                else
+                    delete link;
+            }
             else
-                delete link;
+            {
+                //std::cout << "AcceptLink=" << link << ", " << std::endl;
+                break;
+            }
+        }
     }
     int SendHandler(int num, int64 now)
     {
@@ -496,7 +515,7 @@ public:
         {
             SendPacket *packet = nullptr;
 #ifdef USE_MATRIX_QUEUE
-            bool result = mSendQueue.Pop(&packet);
+            bool result = mSendQueue->Pop(packet);
 #else
             bool result = mSendQueue.try_dequeue(packet);
 #endif
@@ -532,14 +551,14 @@ public:
                 {
                     gone_len += n;
                     want_len -= n;
-                    // if (want_len > 0)
-                    //     printf("Sent Half Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d]\n", 
-                    //        link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n);
+                    if (want_len > 0)
+                        printf("Sent Half Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d]\n", 
+                           link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n);
                 }
                 else
                 {
-                    // printf("Sent failed Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d]\n", 
-                    //    link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n);
+                    printf("Sent failed Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d]\n", 
+                       link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n);
                     if (fail_num++ < 2)
                     {
                         printf("Sent failed Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d], fail_num[%d]\n", 
@@ -565,6 +584,7 @@ private:
         while (mIsRunning)
         {
             int cnt = Wait(wait_time);
+            //std::cout << "Loop cnt=" << cnt << std::endl;
             int64 now = TimeUtil::NowTimeS();
             for (int i = 0; i < cnt; ++i)
             {
@@ -579,7 +599,7 @@ private:
                 }
             }
 #ifdef USE_MATRIX_QUEUE
-            if (mSendQueue.size() > 0 || mLinkQueue.size() > 0)
+            if (mSendQueue->size() > 0 || mLinkQueue->size() > 0)
 #else
             if (mSendQueue.size_approx() > 0 || mLinkQueue.size_approx() > 0)
 #endif
@@ -599,7 +619,7 @@ private:
         auto it = mIpPortLink.find(link->mKey);
         if (it != mIpPortLink.end())
             mIpPortLink.erase(it);
-        //std::cout << "DelLink mFd=" << std::to_string(link->mFd) << ", result=" << std::to_string(result) << std::endl;
+        std::cout << "DelLink mFd=" << std::to_string(link->mFd) << ", result=" << std::to_string(result) << std::endl;
         close(link->mFd);
         delete link;
         return result;
@@ -648,8 +668,8 @@ private:
     std::thread             mThread;
     std::unordered_map<uint64, Link*>           mIpPortLink;
 #ifdef USE_MATRIX_QUEUE
-    MatrixQueue<SendPacket*>                    mSendQueue;
-    MatrixQueue<Link*>                          mLinkQueue;
+    MatrixQueue<SendPacket*>                    *mSendQueue;
+    MatrixQueue<Link*>                          *mLinkQueue;
 #else
     moodycamel::ConcurrentQueue<SendPacket*>    mSendQueue;
     moodycamel::ConcurrentQueue<Link*>          mLinkQueue;
@@ -711,6 +731,7 @@ public:
     }
     int AddLink(Link *link)
     {
+        std::cout << "TcpMotor AddLink!" << std::endl;
         auto trigger = mTriggers[Mod(link->mKey, mTriggerNum)];
         return trigger->PushLink(link);
     }
@@ -730,6 +751,7 @@ private:
 
 int SocketLink::OnRecv(int64 now, int cnt)
 {
+    //std::cout << "SocketLink::OnRecv" << std::endl;
     int result = 0;
     while (1)
     {
@@ -827,6 +849,7 @@ int SocketLink::OnRecv(int64 now, int cnt)
 }
 int AcceptLink::OnRecv(int64 now, int cnt)
 {
+    //std::cout << "AcceptLink::OnRecv" << std::endl;
     while (1)
     {
         struct sockaddr_in addr;
@@ -858,6 +881,7 @@ int AcceptLink::OnRecv(int64 now, int cnt)
 }
 int EventsLink::OnRecv(int64 now, int cnt)
 {
+    //std::cout << "EventsLink::OnRecv" << std::endl;
     mTrigger->EventReset();
     mTrigger->AcceptLink();
     cnt  = cnt > 0 ? cnt : 0;
