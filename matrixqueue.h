@@ -5,7 +5,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 #define INVALID_NUM         -1
 #define MAX_STEP            3
-#define MAX_MATRIX_QUEUE    100
+#define MAX_MATRIX_QUEUE    1024
 
 template <typename T>
 class OneQueue {
