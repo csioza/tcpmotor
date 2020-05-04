@@ -155,7 +155,7 @@ int main(int argc, char *argv[])
     int packet_size = atoi(argv[5]);
     packet_size = packet_size > 16 ? packet_size - 16 : packet_size;
 
-    dcore::TcpMotor *server = new dcore::TcpMotor(11122, 3);
+    dcore::TcpMotor *server = new dcore::TcpMotor(11122, 5);
     dcore::TcpRecvHandler * handler = new TestTcpRecvHandler();
     server->SetRecvHandler(handler);
     server->Run();

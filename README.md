@@ -1,5 +1,5 @@
 # TcpMotor
-a tcp transmit lib, two files, lock free, multi threads
+a tcp transmit lib, lock free, multi threads
 
 	TODO:
 	
@@ -7,6 +7,7 @@ a tcp transmit lib, two files, lock free, multi threads
 	2.DelLink 删除失败情况
 	3.增强健壮性
 	4.压测
+	5.queue验证正确性
 
 	
 ## 环境

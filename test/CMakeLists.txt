@@ -1,4 +1,4 @@
-#server
+#client
 
 cmake_minimum_required(VERSION 3.5)
 
@@ -11,13 +11,13 @@ SET(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-std=c++11 -pthread")
 #aux_source_directory(. DIR_SRC_LISTS)
 
 add_executable(
-    server
+    client
 
-    ../test_server.cpp
+    ../test_client.cpp
     #${DIR_SRC_LISTS}
     )
 
 #ADD_LIBRARY(
-#    server
+#    client
 #    ${CORE_SRC_LISTS}
 #    )

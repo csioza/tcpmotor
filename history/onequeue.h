@@ -13,11 +13,11 @@ public:
     bool Push(const T& val) { 
         if (free_size() <= 0)
             return false;
-        size_t tail = tail_.load(std::memory_order_acquire);// memory_order_relaxed memory_order_acquire
+        size_t tail = tail_.load(std::memory_order_acquire);// memory_order_relaxed
         array_[tail++] = val;
         if (tail >= qlen_)
             tail -= qlen_;
-        tail_.store(tail, std::memory_order_release);//memory_order_release
+        tail_.store(tail, std::memory_order_release);
         return true;
     }
     bool Pop(T& ptr) {

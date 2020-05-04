@@ -361,7 +361,6 @@ public:
     virtual ~AcceptLink() {}
     virtual int OnRecv(int64 now, int cnt = 0);
     virtual LinkType Type() { return LINK_TYPE_ACCEPT; };
-    //virtual void UpdateActiveTime(int64 now) {}
 };
 class EventsLink : public Link
 {
@@ -370,7 +369,6 @@ public:
     virtual ~EventsLink() {}
     virtual int OnRecv(int64 now, int cnt = 0);
     virtual LinkType Type() { return LINK_TYPE_EVENTS; };
-    //virtual void UpdateActiveTime(int64 now) {}
 };
 
 class Trigger
@@ -440,15 +438,8 @@ public:
         }
         link->mTrigger  = this;
         link->mMotor    = mMotor;
-        std::atomic_thread_fence(std::memory_order_acquire);
-        if (EventNotify())
-        {
-            std::cout << "PushLink!" << std::endl;
-        }
-        else
-        {
-            std::cout << "PushLink err" << std::endl;
-        }
+        //std::atomic_thread_fence(std::memory_order_acquire);
+        EventNotify();
 
         return 0;
     }
@@ -465,6 +456,7 @@ public:
             delete packet;
             return INVALID;
         }
+        //std::atomic_thread_fence(std::memory_order_acquire);
         EventNotify();
 
         return 0;
@@ -496,17 +488,13 @@ public:
             if (mLinkQueue.try_dequeue(link))
 #endif
             {
-                //std::cout << "AcceptLink=" << link << ", " << link->mKey << std::endl;
                 if (link)
                     AddLink(link);
                 else
                     delete link;
             }
             else
-            {
-                //std::cout << "AcceptLink=" << link << ", " << std::endl;
                 break;
-            }
         }
     }
     int SendHandler(int num, int64 now)
@@ -554,16 +542,16 @@ public:
                     want_len -= n;
                     if (want_len > 0)
                         printf("Sent Half Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d]\n", 
-                           link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n);
+                                link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n);
                 }
                 else
                 {
                     printf("Sent failed Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d]\n", 
-                       link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n);
+                            link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n);
                     if (fail_num++ < 2)
                     {
                         printf("Sent failed Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d], fail_num[%d]\n", 
-                           link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n, fail_num);
+                                link->mIp.c_str(), link->mPort, link->mFd, gone_len, want_len, n, fail_num);
                         usleep(1);
                     }
                     else
@@ -585,7 +573,6 @@ private:
         while (mIsRunning)
         {
             int cnt = Wait(wait_time);
-            //std::cout << "Loop cnt=" << cnt << std::endl;
             int64 now = TimeUtil::NowTimeS();
             for (int i = 0; i < cnt; ++i)
             {
@@ -752,7 +739,6 @@ private:
 
 int SocketLink::OnRecv(int64 now, int cnt)
 {
-    //std::cout << "SocketLink::OnRecv" << std::endl;
     int result = 0;
     while (1)
     {
@@ -850,7 +836,6 @@ int SocketLink::OnRecv(int64 now, int cnt)
 }
 int AcceptLink::OnRecv(int64 now, int cnt)
 {
-    //std::cout << "AcceptLink::OnRecv" << std::endl;
     while (1)
     {
         struct sockaddr_in addr;
@@ -882,7 +867,6 @@ int AcceptLink::OnRecv(int64 now, int cnt)
 }
 int EventsLink::OnRecv(int64 now, int cnt)
 {
-    //std::cout << "EventsLink::OnRecv" << std::endl;
     mTrigger->EventReset();
     mTrigger->AcceptLink();
     cnt  = cnt > 0 ? cnt : 0;
