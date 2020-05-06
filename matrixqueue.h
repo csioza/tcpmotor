@@ -54,13 +54,14 @@ private:
 template <typename T>
 class MatrixQueue {
 public:
-    MatrixQueue(size_t max_len, size_t qlen) : max_len_(max_len), producter_num_(0), consumer_num_(0)
+    MatrixQueue(size_t max_row_len, size_t max_col_len, size_t qlen) : 
+            max_row_len_(max_row_len), max_col_len_(max_col_len), producter_num_(0), consumer_num_(0)
     {
-        array_ = new OneQueue<T>**[max_len_];
-        for (int i = 0; i < max_len_; ++i)
-            array_[i] = (OneQueue<T>**)malloc(sizeof(OneQueue<T>**) * max_len_);
-        for (int i = 0; i < max_len_; ++i)
-            for (int j = 0; j < max_len_; ++j)
+        array_ = new OneQueue<T>**[max_row_len_];
+        for (int i = 0; i < max_col_len_; ++i)
+            array_[i] = (OneQueue<T>**)malloc(sizeof(OneQueue<T>**) * max_col_len_);
+        for (int i = 0; i < max_row_len_; ++i)
+            for (int j = 0; j < max_col_len_; ++j)
                 array_[i][j] = new OneQueue<T>(qlen);
         id_ = matrix_queue_index_.fetch_add(1, std::memory_order_release);
         //std::cout << "MatrixQueue id_=" << id_ << std::endl;
@@ -69,10 +70,10 @@ public:
     MatrixQueue& operator=(MatrixQueue const&) = delete;
     ~MatrixQueue() 
     {
-        for (int i = 0; i < max_len_; ++i)
-            for (int j = 0; j < max_len_; ++j)
+        for (int i = 0; i < max_row_len_; ++i)
+            for (int j = 0; j < max_col_len_; ++j)
                 delete array_[i][j];
-        for (int i = 0; i < max_len_; ++i)
+        for (int i = 0; i < max_row_len_; ++i)
             delete array_[i];
         delete[] array_;
     }
@@ -82,10 +83,10 @@ public:
             thread_local_producter_index_[id_] = producter_num_.fetch_add(1, std::memory_order_release);
             std::cout << "id_=" << id_ << ", thread_local_producter_index_=" << thread_local_producter_index_[id_] 
                     << ", producter_num_=" << producter_num_ << std::endl;
-            if (thread_local_producter_index_[id_] >= max_len_)
+            if (thread_local_producter_index_[id_] >= max_row_len_)
             {
                 std::cout << "id_=" << id_ << ", error, thread_local_producter_index_=" << thread_local_producter_index_[id_] 
-                        << ", max_len_=" << max_len_ << std::endl;
+                        << ", max_row_len_=" << max_row_len_ << std::endl;
                 return false;
             }
         }
@@ -119,9 +120,9 @@ public:
         {
             thread_local_consumer_index_[id_] = consumer_num_.fetch_add(1, std::memory_order_release);
             std::cout << "id_=" << id_ << ", thread_local_consumer_index_=" << thread_local_consumer_index_[id_] << ", consumer_num_=" << consumer_num_.load(std::memory_order_relaxed) << std::endl;
-            if (thread_local_consumer_index_[id_] > max_len_)
+            if (thread_local_consumer_index_[id_] > max_col_len_)
             {
-                std::cout << "id_=" << id_ << ", error, thread_local_consumer_index_=" << thread_local_consumer_index_[id_] << ", max_len_=" << max_len_ << std::endl;
+                std::cout << "id_=" << id_ << ", error, thread_local_consumer_index_=" << thread_local_consumer_index_[id_] << ", max_col_len_=" << max_col_len_ << std::endl;
                 return false;
             }
         }
@@ -160,7 +161,8 @@ public:
         return res;
     }
 private:
-    size_t max_len_;//二位矩阵大小,最大生产者和消费者数量
+    size_t max_row_len_;//最大生产者数量
+    size_t max_col_len_;//最大消费者数量
     std::atomic<size_t> producter_num_;//当前生产者数量
     std::atomic<size_t> consumer_num_;//当前消费者数量
     std::atomic<size_t> id_;

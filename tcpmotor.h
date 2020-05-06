@@ -379,8 +379,8 @@ public:
         mEpollFd        = epoll_create(256);
         mEvents         = new struct epoll_event[MAX_EVENT_NUM];
 #ifdef USE_MATRIX_QUEUE
-        mSendQueue      = new MatrixQueue<SendPacket*>(MAX_MATRIX_THREAD, MAX_MATRIX_QUEUE_SIZE);
-        mLinkQueue      = new MatrixQueue<Link*>(MAX_MATRIX_THREAD, MAX_MATRIX_QUEUE_SIZE);
+        mSendQueue      = new MatrixQueue<SendPacket*>(MAX_MATRIX_THREAD, MAX_MATRIX_THREAD, MAX_MATRIX_QUEUE_SIZE);
+        mLinkQueue      = new MatrixQueue<Link*>(MAX_MATRIX_THREAD, MAX_MATRIX_THREAD, MAX_MATRIX_QUEUE_SIZE);
 #endif
     }
     ~Trigger()
