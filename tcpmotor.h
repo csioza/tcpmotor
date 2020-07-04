@@ -28,7 +28,7 @@
 #include <signal.h>
 //
 
-#define USE_MATRIX_QUEUE22
+#define USE_MATRIX_QUEUE2
 
 #ifdef USE_MATRIX_QUEUE
 #include "matrixqueue.h"

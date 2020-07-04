@@ -67,7 +67,19 @@ public:
     }
     MatrixQueue(MatrixQueue const&) = delete;
     MatrixQueue& operator=(MatrixQueue const&) = delete;
-    ~MatrixQueue() {}
+    ~MatrixQueue() 
+    {
+        for (int i = 0; i < MAX_MATRIX_QUEUE_INIT_NUM; ++i)
+            for (int j = 0; j < MAX_MATRIX_QUEUE_INIT_NUM; ++j)
+            {
+                auto queue = array_[i][j].load(std::memory_order_acquire);
+                if (queue)
+                {
+                    array_[i][j].store(nullptr, std::memory_order_release);
+                    delete queue;
+                }
+            }
+    }
     bool Push(const T& val) {
         if (thread_local_producter_index_[id_] == INVALID_NUM)
         {
