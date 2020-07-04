@@ -28,11 +28,16 @@
 #include <signal.h>
 //
 
-#define USE_MATRIX_QUEUE
+#define USE_MATRIX_QUEUE22
+
 #ifdef USE_MATRIX_QUEUE
 #include "matrixqueue.h"
 #else
+#ifdef USE_MATRIX_QUEUE2
+#include "matrixqueue2.h"
+#else
 #include "concurrentqueue.h"
+#endif
 #endif
 
 typedef char                int8;
@@ -381,6 +386,11 @@ public:
 #ifdef USE_MATRIX_QUEUE
         mSendQueue      = new MatrixQueue<SendPacket*>(MAX_MATRIX_THREAD, MAX_MATRIX_THREAD, MAX_MATRIX_QUEUE_SIZE);
         mLinkQueue      = new MatrixQueue<Link*>(MAX_MATRIX_THREAD, MAX_MATRIX_THREAD, MAX_MATRIX_QUEUE_SIZE);
+#else
+#ifdef USE_MATRIX_QUEUE2
+        mSendQueue      = new MatrixQueue<SendPacket*>(MAX_MATRIX_QUEUE_SIZE);
+        mLinkQueue      = new MatrixQueue<Link*>(MAX_MATRIX_QUEUE_SIZE);
+#endif
 #endif
     }
     ~Trigger()
@@ -428,7 +438,12 @@ public:
 #ifdef USE_MATRIX_QUEUE
         bool r = mLinkQueue->Push(link);
 #else
+
+#ifdef USE_MATRIX_QUEUE2
+        bool r = mLinkQueue->Push(link);
+#else
         bool r = mLinkQueue.enqueue(link);
+#endif
 #endif
         if (!r)
         {
@@ -448,7 +463,11 @@ public:
 #ifdef USE_MATRIX_QUEUE
         bool r = mSendQueue->Push(packet);
 #else
+#ifdef USE_MATRIX_QUEUE2
+        bool r = mSendQueue->Push(packet);
+#else
         bool r = mSendQueue.enqueue(packet);
+#endif
 #endif
         if (!r)
         {
@@ -485,7 +504,11 @@ public:
 #ifdef USE_MATRIX_QUEUE
             if (mLinkQueue->Pop(link))
 #else
+#ifdef USE_MATRIX_QUEUE2
+            if (mLinkQueue->Pop(link))
+#else
             if (mLinkQueue.try_dequeue(link))
+#endif
 #endif
             {
                 if (link)
@@ -506,7 +529,11 @@ public:
 #ifdef USE_MATRIX_QUEUE
             bool result = mSendQueue->Pop(packet);
 #else
+#ifdef USE_MATRIX_QUEUE2
+            bool result = mSendQueue->Pop(packet);
+#else
             bool result = mSendQueue.try_dequeue(packet);
+#endif
 #endif
             if (!result || !packet)
                 return send_num;
@@ -589,7 +616,11 @@ private:
 #ifdef USE_MATRIX_QUEUE
             if (mSendQueue->size() > 0 || mLinkQueue->size() > 0)
 #else
+#ifdef USE_MATRIX_QUEUE2
+            if (mSendQueue->size() > 0 || mLinkQueue->size() > 0)
+#else
             if (mSendQueue.size_approx() > 0 || mLinkQueue.size_approx() > 0)
+#endif
 #endif
             {
                 wait_time = 0;
@@ -659,8 +690,13 @@ private:
     MatrixQueue<SendPacket*>                    *mSendQueue;
     MatrixQueue<Link*>                          *mLinkQueue;
 #else
+#ifdef USE_MATRIX_QUEUE2
+    MatrixQueue<SendPacket*>                    *mSendQueue;
+    MatrixQueue<Link*>                          *mLinkQueue;
+#else
     moodycamel::ConcurrentQueue<SendPacket*>    mSendQueue;
     moodycamel::ConcurrentQueue<Link*>          mLinkQueue;
+#endif
 #endif
     TcpMotor*               mMotor;
     int                     mDriveFd;//eventfd 用于接收连接和发送数据，避免线程空跑
