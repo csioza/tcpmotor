@@ -1,9 +1,5 @@
 # TcpMotor
 a tcp transmit lib, lock free, multi threads
-
-	TODO:
-	1.包的有序性
-	2.多生产多消费队列能否动态长度
 	
 	1.限流
 	2.DelLink 删除失败情况
@@ -43,7 +39,7 @@ a tcp transmit lib, lock free, multi threads
 	sumCount    [680000]
 	
 	q2
-	
+
 	msg_len     [1024]
 	qps         [15585]
 	us0_499     [994711]
