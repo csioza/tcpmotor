@@ -2,6 +2,8 @@
 a tcp transmit lib, lock free, multi threads
 
 	TODO:
+	1.包的有序性
+	2.多生产多消费队列能否动态长度
 	
 	1.限流
 	2.DelLink 删除失败情况

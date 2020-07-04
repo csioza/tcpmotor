@@ -64,7 +64,6 @@ public:
             for (int j = 0; j < max_col_len_; ++j)
                 array_[i][j] = new OneQueue<T>(qlen);
         id_ = matrix_queue_index_.fetch_add(1, std::memory_order_release);
-        //std::cout << "MatrixQueue id_=" << id_ << std::endl;
     }
     MatrixQueue(MatrixQueue const&) = delete;
     MatrixQueue& operator=(MatrixQueue const&) = delete;
