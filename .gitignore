@@ -12,6 +12,7 @@ test/concurrentqueue.h
 test/concurrentqueue2.h
 test/onequeue.h
 test/matrixqueue.h
+test/matrixqueue2.h
 o/
 emit/
 *.out
@@ -59,3 +60,4 @@ bin/lib/*
 log.txt
 *.db
 *.opendb
+.vscode
