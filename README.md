@@ -1,13 +1,43 @@
 # Overview:
 TcpMotor is a minimal tcp transmit lib, whitch has lock-free, multi-thread, only-header, using c++11 and high performance features.
 
-# Design:
-
+# Design:(improving)
+## OneQueue
+	a single-producer, single-consumer lock-free queue.
+## MatrixQueue
+	a multi-producer, multi-consumer lock-free queue. using OneQueue.
+## TcpMotor
+	using MatrixQueue.
 
 # Usage:
-
+1. copy tcpmotor.h and matrixqueue.h into your project.
+2. include the header.
+```
+#include "tcpmotor.h"
+```
+3. code.
+```
+   	dcore::TcpMotor *server = new dcore::TcpMotor(port, 5);
+	//receive handle, 接收消息会回调该接口
+    dcore::TcpRecvHandler *handler = new TestTcpRecvHandler();
+    server->SetRecvHandler(handler);
+	//启动
+    server->Run();
+	......
+	//发送数据
+	std::string data = "hello";
+    server->Send(ip, port, data.c_str(), data.size(), NULL);
+	......
+	//停止,清理内存
+    server->Stop();
+    delete server;
+```
 ## Notice:
-
+1. in matrixqueue.h
+```
+#define MATRIX_QUEUE_NUM_MAX_INDEX      1024    //一个进程创建MatrixQueue最大数量，注意要设置足够大，避免越界
+#define MATRIX_QUEUE_ARRAY_MAX_NUM      1024    //MatrixQueue中生产者消费者矩阵大小，注意要设置足够大，避免越界
+```
 
 # Test
 ## 生产环境
@@ -34,7 +64,7 @@ TcpMotor is a minimal tcp transmit lib, whitch has lock-free, multi-thread, only
 	sumCount    [680000]
 
 ## 本地机器
-	using matrixqueue2.h
+	using matrixqueue.h
 
 	msg_len     [1024]
 	qps         [15585]
@@ -51,25 +81,6 @@ TcpMotor is a minimal tcp transmit lib, whitch has lock-free, multi-thread, only
 	ms80_89     [0]
 	ms90_99     [0]
 	average     [183]
-	sumCount    [1000000]
-
-	using matrixqueue.h
-
-	msg_len     [1024]
-	qps         [17193]
-	us0_499     [993150]
-	us500_999   [679]
-	ms1_9       [130]
-	ms10_19     [0]
-	ms20_29     [0]
-	ms30_39     [0]
-	ms40_49     [0]
-	ms50_59     [0]
-	ms60_69     [0]
-	ms70_79     [0]
-	ms80_89     [0]
-	ms90_99     [0]
-	average     [162]
 	sumCount    [1000000]
 
 	using concurrentqueue.h

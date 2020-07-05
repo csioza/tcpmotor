@@ -23,8 +23,8 @@
 
 #define INVALID_NUM                     -1
 #define MATRIX_QUEUE_MAX_STEP           3
-#define MATRIX_QUEUE_NUM_MAX_INDEX      1024    //注意要设置足够大，避免越界
-#define MATRIX_QUEUE_ARRAY_MAX_NUM      1024    //注意要设置足够大，避免越界
+#define MATRIX_QUEUE_NUM_MAX_INDEX      1024    //一个进程创建MatrixQueue最大数量，注意要设置足够大，避免越界
+#define MATRIX_QUEUE_ARRAY_MAX_NUM      1024    //MatrixQueue中生产者消费者矩阵大小，注意要设置足够大，避免越界
 #define MATRIX_QUEUE_ARRAY_INIT_NUM     8       //保证初始化不久后的性能
 
 template <typename T>
