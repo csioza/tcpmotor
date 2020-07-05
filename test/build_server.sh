@@ -8,6 +8,7 @@ sed -i "s/test_client.cpp/test_server.cpp/g" "./CMakeLists.txt"
 
 rm -rf *.h
 cp ../*.h ./
+cp ../history/concurrentqueue.h ./
 
 rm -rf server
 

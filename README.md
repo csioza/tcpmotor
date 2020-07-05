@@ -2,11 +2,11 @@
 TcpMotor is a minimal tcp transmit lib, whitch has lock-free, multi-thread, only-header, using c++11 and high performance features.
 # Design:(improving)
 ## OneQueue
-	a single-producer, single-consumer lock-free queue.
+a single-producer, single-consumer lock-free queue.
 ## MatrixQueue
-	a multi-producer, multi-consumer lock-free queue. using OneQueue.
+a multi-producer, multi-consumer lock-free queue. using OneQueue.
 ## TcpMotor
-	using MatrixQueue.
+using MatrixQueue.
 # Usage:
 1. copy tcpmotor.h and matrixqueue.h into your project.
 2. include the header.
@@ -34,10 +34,8 @@ delete server;
 #define MATRIX_QUEUE_NUM_MAX_INDEX 1024 //一个进程创建MatrixQueue最大数量，注意要设置足够大，避免越界
 #define MATRIX_QUEUE_ARRAY_MAX_NUM 1024 //MatrixQueue中生产者消费者矩阵大小，注意要设置足够大，避免越界
 ```
-
 # Test
 ## 生产环境 centos7 24cpu
-
 	跨机房 cpu:3% using matrixqueue_fixed_size.h
 
 	msg_len     [1024]

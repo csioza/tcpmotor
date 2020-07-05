@@ -68,14 +68,12 @@ namespace dcore {
 #define MAX_TRIGGER_NUM         100
 #define MAX_PACKET_SIZE         8192
 #define MAX_RECBUFF_SIZE        (MAX_PACKET_SIZE * 3)
-#define INVALID                 -1 
 #define MAX_EVENT_NUM           1024
 #define MAX_QUEUE_BIAS          100
 #define INVALID_SOCKET          -1
 #define INT_64_MAX              0x7fffffffffffffff
 #define LINK_ACTIVE_TIMEOUT     3600//秒
 #define EPOLL_WAIT_TIMEOUT      10000//毫秒
-#define MAX_MATRIX_THREAD       32
 #define MAX_MATRIX_QUEUE_SIZE   50000
 
 #pragma pack(1)
@@ -195,7 +193,7 @@ public:
         const char* ret = inet_ntop(host->h_addrtype, host->h_addr_list[0], ipStr, sizeof(ipStr));
         if (NULL == ret) 
         {
-            std::cout << "hostname transform to ip failed\n" << std::endl;
+            std::cout << "hostname transform to ip failed" << std::endl;
             return false;
         }
         Ip = ipStr;
@@ -216,7 +214,7 @@ public:
         int sfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         if(sfd == INVALID_SOCKET)
         {
-            std::cout << "invalid socket !\n" << std::endl;
+            std::cout << "invalid socket!" << std::endl;
             return sfd;
         }
         sockaddr_in serverAddr;//绑定端口 
@@ -235,16 +233,16 @@ public:
     {
         int flags;
         flags = fcntl (sfd, F_GETFL, 0);//得到文件状态标志
-        if (flags == INVALID)
+        if (flags == INVALID_NUM)
         {
             printf("fcntl failed\n");
-            return INVALID;
+            return INVALID_NUM;
         }
         flags |= O_NONBLOCK;//设置文件状态标志
-        if (fcntl (sfd, F_SETFL, flags) == INVALID)
+        if (fcntl (sfd, F_SETFL, flags) == INVALID_NUM)
         {
             printf("fcntl failed\n");
-            return INVALID;
+            return INVALID_NUM;
         }
         return 0;
     }
@@ -253,7 +251,7 @@ public:
         int sfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         if(sfd == INVALID_SOCKET)
         {
-            std::cout << "invalid socket !\n" << std::endl;
+            std::cout << "invalid socket!" << std::endl;
             return sfd;
         }
         struct sockaddr_in server_addr; 
@@ -278,12 +276,12 @@ public:
     static int CreateBindListen(const std::string &ip, int port, bool isBlock)
     {
         int sfd = CreateBind(ip, port);
-        if (!isBlock && Nonblock(sfd) == INVALID)
+        if (!isBlock && Nonblock(sfd) == INVALID_NUM)
         {
             printf("nonblock error\n");
             abort();
         }
-        if (listen(sfd, SOMAXCONN) == INVALID)
+        if (listen(sfd, SOMAXCONN) == INVALID_NUM)
         {
             printf("listen error\n");
             abort();
@@ -298,21 +296,21 @@ public:
         {
             printf("set rcvBuff failed!\n");
             close(sfd);
-            return INVALID;
+            return INVALID_NUM;
         }
         int sndBuff = 524288;//512k
         if (0 != setsockopt(sfd, SOL_SOCKET, SO_SNDBUF, (const char *)&sndBuff, sizeof(sndBuff)))
         {
             printf("set sndBuff failed!\n");
             close(sfd);
-            return INVALID;
+            return INVALID_NUM;
         }
         int nOpt = 1;
         if (0 != setsockopt(sfd, IPPROTO_TCP, TCP_NODELAY, (const char *)&nOpt, sizeof(nOpt)))
         {
             printf("set tcp_nodelay failed!\n");
             close(sfd);
-            return INVALID;
+            return INVALID_NUM;
         }
         struct linger s_linger;
         s_linger.l_onoff = 1;
@@ -321,7 +319,7 @@ public:
         {
             printf("set linger failed!\n");
             close(sfd);
-            return INVALID;
+            return INVALID_NUM;
         }
         return 0;
     }
@@ -450,7 +448,7 @@ public:
         {
             std::cout << "PutLink failed!" << std::endl;
             delete link;
-            return INVALID;
+            return INVALID_NUM;
         }
         link->mTrigger  = this;
         link->mMotor    = mMotor;
@@ -470,7 +468,7 @@ public:
         {
             std::cout << "PutPacket failed!" << std::endl;
             delete packet;
-            return INVALID;
+            return INVALID_NUM;
         }
         //std::atomic_thread_fence(std::memory_order_acquire);
         EventNotify();
