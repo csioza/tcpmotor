@@ -1,11 +1,31 @@
+/* Copyright 科英 <csioza@163.com>. All rights reserved.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to
+ * deal in the Software without restriction, including without limitation the
+ * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
+ */
 #pragma once
 #include <atomic>
-///////////////////////////////////////////////////////////////////////////////
-//lock free queue, muti producters, muti consumers
-///////////////////////////////////////////////////////////////////////////////
-#define INVALID_NUM         -1
-#define MAX_STEP            3
-#define MAX_MATRIX_QUEUE    1024
+
+#define INVALID_NUM                     -1
+#define MATRIX_QUEUE_MAX_STEP           3
+#define MATRIX_QUEUE_NUM_MAX_INDEX      1024    //注意要设置足够大，避免越界
+#define MATRIX_QUEUE_ARRAY_MAX_NUM      1024    //注意要设置足够大，避免越界
+#define MATRIX_QUEUE_ARRAY_INIT_NUM     8       //保证初始化不久后的性能
 
 template <typename T>
 class OneQueue {
@@ -13,11 +33,13 @@ public:
     OneQueue(size_t qlen) : qlen_(qlen), head_(0), tail_(0) { array_ = new T[qlen]; }
     OneQueue(OneQueue const&) = delete;
     OneQueue& operator=(OneQueue const&) = delete;
+    OneQueue(OneQueue const&&) = delete;
+    OneQueue& operator=(OneQueue const&&) = delete;
     ~OneQueue() { delete[] array_; }
     bool Push(const T& val) { 
         if (free_size() <= 0)
             return false;
-        size_t tail = tail_.load(std::memory_order_acquire);// memory_order_relaxed
+        size_t tail = tail_.load(std::memory_order_acquire);
         array_[tail++] = val;
         if (tail >= qlen_)
             tail -= qlen_;
@@ -54,100 +76,105 @@ private:
 template <typename T>
 class MatrixQueue {
 public:
-    MatrixQueue(size_t max_row_len, size_t max_col_len, size_t qlen) : 
-            max_row_len_(max_row_len), max_col_len_(max_col_len), producter_num_(0), consumer_num_(0)
+    MatrixQueue(int qlen) : producter_num_(0), consumer_num_(0), onequeue_len_(qlen)
     {
-        array_ = new OneQueue<T>**[max_row_len_];
-        for (int i = 0; i < max_col_len_; ++i)
-            array_[i] = (OneQueue<T>**)malloc(sizeof(OneQueue<T>**) * max_col_len_);
-        for (int i = 0; i < max_row_len_; ++i)
-            for (int j = 0; j < max_col_len_; ++j)
-                array_[i][j] = new OneQueue<T>(qlen);
-        id_ = matrix_queue_index_.fetch_add(1, std::memory_order_release);
+        memset(array_, 0, sizeof(array_));
+        for (int i = 0; i < MATRIX_QUEUE_ARRAY_INIT_NUM; ++i)
+            for (int j = 0; j < MATRIX_QUEUE_ARRAY_INIT_NUM; ++j)
+                array_[i][j].store(new OneQueue<T>(onequeue_len_), std::memory_order_release);
+        matrix_queue_id_ = matrix_queue_index_.fetch_add(1, std::memory_order_release);
     }
     MatrixQueue(MatrixQueue const&) = delete;
+    MatrixQueue(MatrixQueue const&&) = delete;
     MatrixQueue& operator=(MatrixQueue const&) = delete;
+    MatrixQueue& operator=(MatrixQueue const&&) = delete;
     ~MatrixQueue() 
     {
-        for (int i = 0; i < max_row_len_; ++i)
-            for (int j = 0; j < max_col_len_; ++j)
-                delete array_[i][j];
-        for (int i = 0; i < max_row_len_; ++i)
-            delete array_[i];
-        delete[] array_;
+        for (int i = 0; i < MATRIX_QUEUE_ARRAY_INIT_NUM; ++i)
+            for (int j = 0; j < MATRIX_QUEUE_ARRAY_INIT_NUM; ++j)
+            {
+                auto queue = array_[i][j].load(std::memory_order_acquire);
+                if (queue)
+                {
+                    array_[i][j].store(nullptr, std::memory_order_release);
+                    delete queue;
+                }
+            }
     }
     bool Push(const T& val) {
-        if (thread_local_producter_index_[id_] == INVALID_NUM)
+        if (tl_producter_indexs_[matrix_queue_id_] == INVALID_NUM)
         {
-            thread_local_producter_index_[id_] = producter_num_.fetch_add(1, std::memory_order_release);
-            std::cout << "id_=" << id_ << ", thread_local_producter_index_=" << thread_local_producter_index_[id_] 
-                    << ", producter_num_=" << producter_num_ << std::endl;
-            if (thread_local_producter_index_[id_] >= max_row_len_)
+            tl_producter_indexs_[matrix_queue_id_] = producter_num_.fetch_add(1, std::memory_order_release);
+            if (tl_producter_indexs_[matrix_queue_id_] >= MATRIX_QUEUE_ARRAY_MAX_NUM)
             {
-                std::cout << "id_=" << id_ << ", error, thread_local_producter_index_=" << thread_local_producter_index_[id_] 
-                        << ", max_row_len_=" << max_row_len_ << std::endl;
+                std::cout << "MatrixQueue producter_id:" << tl_producter_indexs_[matrix_queue_id_] << " >= MATRIX_QUEUE_ARRAY_MAX_NUM" << std::endl;
                 return false;
             }
         }
-        size_t cur_consumer_num = consumer_num_.load(std::memory_order_relaxed);//memory_order_acquire
-        int aim_index   = 0;
-        if (cur_consumer_num > 0)
+        size_t cur_consumer_num = consumer_num_.load(std::memory_order_relaxed);
+        OneQueue<T> *aim_queue = nullptr;
+        if (cur_consumer_num >= 0)
         {
             int min_size    = 100000000;
             int max_step    = 0;
-            for (int i = 0; i < cur_consumer_num && max_step < MAX_STEP; ++i)
+            for (int i = 0; i <= cur_consumer_num && max_step < MATRIX_QUEUE_MAX_STEP; ++i)
             {
-                int cur     = array_[thread_local_producter_index_[id_]][i]->used_size();
-                if (cur < min_size)
+                auto cur_queue = array_[tl_producter_indexs_[matrix_queue_id_]][i].load(std::memory_order_acquire);
+                if (cur_queue)
                 {
-                    aim_index   = i;
-                    min_size    = cur;
-                    max_step++;
+                    int cur = cur_queue->used_size();
+                    if (cur < min_size)
+                    {
+                        aim_queue   = cur_queue;
+                        min_size    = cur;
+                        max_step++;
+                    }
+                }
+                else
+                {
+                    aim_queue = new OneQueue<T>(onequeue_len_);
+                    array_[tl_producter_indexs_[matrix_queue_id_]][i].store(aim_queue, std::memory_order_release);
+                    break;
                 }
             }
         }
-        if (array_[thread_local_producter_index_[id_]][aim_index]->Push(val))
-        {
-            // std::cout << "id_=" << id_ << ", producter_index[" << thread_local_producter_index_[id_] << "] ==> val[" << val << "]==> consumer_index[" << aim_index << "]" << ", cur_consumer_num[" << cur_consumer_num << "]" << std::endl;
+        if (aim_queue && aim_queue->Push(val))
             return true;
-        }
-        // std::cout << "id_=" << id_ << ", producter_index[" << thread_local_producter_index_[id_] << "] =/=> val[" << val << "]=/=> consumer_index[" << aim_index << "]" << ", cur_consumer_num[" << cur_consumer_num << "]" << std::endl;
         return false;
     }
     bool Pop(T& ptr) {
-        if (thread_local_consumer_index_[id_] == INVALID_NUM)
+        if (tl_consumer_indexs_[matrix_queue_id_] == INVALID_NUM)
         {
-            thread_local_consumer_index_[id_] = consumer_num_.fetch_add(1, std::memory_order_release);
-            std::cout << "id_=" << id_ << ", thread_local_consumer_index_=" << thread_local_consumer_index_[id_] << ", consumer_num_=" << consumer_num_.load(std::memory_order_relaxed) << std::endl;
-            if (thread_local_consumer_index_[id_] > max_col_len_)
+            tl_consumer_indexs_[matrix_queue_id_] = consumer_num_.fetch_add(1, std::memory_order_release);
+            if (tl_consumer_indexs_[matrix_queue_id_] > MATRIX_QUEUE_ARRAY_MAX_NUM)
             {
-                std::cout << "id_=" << id_ << ", error, thread_local_consumer_index_=" << thread_local_consumer_index_[id_] << ", max_col_len_=" << max_col_len_ << std::endl;
+                std::cout << "MatrixQueue consumer_id:" << tl_consumer_indexs_[matrix_queue_id_] << " >= MATRIX_QUEUE_ARRAY_MAX_NUM" << std::endl;
                 return false;
             }
         }
-        size_t cur_producter_num = producter_num_.load(std::memory_order_relaxed);
-        int aim_index   = 0;
+        size_t cur_producter_num = producter_num_.load(std::memory_order_acquire);
+        OneQueue<T> *aim_queue = nullptr;
         if (cur_producter_num > 0)
         {
             int max_size    = 0;
             int max_step    = 0;
-            for (int i = 0; i < cur_producter_num && max_step < MAX_STEP; ++i)
+            for (int i = 0; i < cur_producter_num && max_step < MATRIX_QUEUE_MAX_STEP; ++i)
             {
-                int cur     = array_[i][thread_local_consumer_index_[id_]]->used_size();
-                if (cur > max_size)
+                auto cur_queue = array_[i][tl_consumer_indexs_[matrix_queue_id_]].load(std::memory_order_relaxed);
+                if (cur_queue)
                 {
-                    aim_index   = i;
-                    max_size    = cur;
-                    max_step++;
+                    int cur = cur_queue->used_size();
+                    if (cur > max_size)
+                    {
+                        aim_queue   = cur_queue;
+                        max_size    = cur;
+                        max_step++;
+                    }
                 }
             }
         }
-        if (array_[aim_index][thread_local_consumer_index_[id_]]->Pop(ptr))
-        {
-            // std::cout << "id_=" << id_ << ", consumer_index[" << thread_local_consumer_index_[id_] << "] <== val[" << ptr << "] <== producter_index[" << aim_index << "]" << ", cur_producter_num[" << cur_producter_num<< "]" << std::endl;
+        if (aim_queue && aim_queue->Pop(ptr))
             return true;
-        }
-        // std::cout << "id_=" << id_ << ", consumer_index[" << thread_local_consumer_index_[id_] << "] <=/= val[" << ptr << "] <=/= producter_index[" << aim_index << "]" << ", cur_producter_num[" << cur_producter_num<< "]" << std::endl;
         return false;
     }
     inline size_t size() {
@@ -156,20 +183,23 @@ public:
         size_t cur_consumer_num  = consumer_num_.load(std::memory_order_relaxed);
         for (int i = 0; i < cur_consumer_num; ++i)
             for (int j = 0; j < cur_producter_num; ++j)
-                res += array_[i][j]->used_size();
+            {
+                auto cur_queue = array_[i][j].load(std::memory_order_relaxed);
+                if (cur_queue)
+                    res += cur_queue->used_size();
+            }
         return res;
     }
 private:
-    size_t max_row_len_;//最大生产者数量
-    size_t max_col_len_;//最大消费者数量
-    std::atomic<size_t> producter_num_;//当前生产者数量
-    std::atomic<size_t> consumer_num_;//当前消费者数量
-    std::atomic<size_t> id_;
-    static std::atomic<size_t> matrix_queue_index_;
-    OneQueue<T>*** array_;
-    static thread_local std::vector<int> thread_local_producter_index_;
-    static thread_local std::vector<int> thread_local_consumer_index_;
+    std::atomic<size_t>         producter_num_;     //当前生产者数量
+    std::atomic<size_t>         consumer_num_;      //当前消费者数量
+    int                         onequeue_len_;      //OneQueue的长度
+    int                         matrix_queue_id_;   //MatrixQueue实例的编号
+    static std::atomic<size_t>  matrix_queue_index_;//MatrixQueue类个数的序号
+    std::atomic<OneQueue<T> *>  array_[MATRIX_QUEUE_ARRAY_MAX_NUM][MATRIX_QUEUE_ARRAY_MAX_NUM];
+    static thread_local std::vector<int> tl_producter_indexs_;
+    static thread_local std::vector<int> tl_consumer_indexs_;
 };
 template <typename T> std::atomic<size_t> MatrixQueue<T>::matrix_queue_index_(0);
-template <typename T> thread_local std::vector<int> MatrixQueue<T>::thread_local_producter_index_(MAX_MATRIX_QUEUE, INVALID_NUM);
-template <typename T> thread_local std::vector<int> MatrixQueue<T>::thread_local_consumer_index_(MAX_MATRIX_QUEUE, INVALID_NUM);
+template <typename T> thread_local std::vector<int> MatrixQueue<T>::tl_producter_indexs_(MATRIX_QUEUE_NUM_MAX_INDEX, INVALID_NUM);
+template <typename T> thread_local std::vector<int> MatrixQueue<T>::tl_consumer_indexs_(MATRIX_QUEUE_NUM_MAX_INDEX, INVALID_NUM);

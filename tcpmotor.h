@@ -1,3 +1,23 @@
+/* Copyright 科英 <csioza@163.com>. All rights reserved.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to
+ * deal in the Software without restriction, including without limitation the
+ * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ * IN THE SOFTWARE.
+ */
 #pragma once
 //c++
 #include <assert.h>
@@ -26,18 +46,12 @@
 #include <netdb.h>
 #include <sys/time.h>
 #include <signal.h>
-//
-
-#define USE_MATRIX_QUEUE2
-
+//预编译
+#define USE_MATRIX_QUEUE
 #ifdef USE_MATRIX_QUEUE
 #include "matrixqueue.h"
 #else
-#ifdef USE_MATRIX_QUEUE2
-#include "matrixqueue2.h"
-#else
 #include "concurrentqueue.h"
-#endif
 #endif
 
 typedef char                int8;
@@ -88,9 +102,6 @@ public:
     static uint64 NowTimeS() {
         return time(NULL);
     }
-    // static uint64 NowTimeClick() {
-    //     return click();
-    // }
 };
 std::string RandomString(int len)
 {
@@ -384,13 +395,8 @@ public:
         mEpollFd        = epoll_create(256);
         mEvents         = new struct epoll_event[MAX_EVENT_NUM];
 #ifdef USE_MATRIX_QUEUE
-        mSendQueue      = new MatrixQueue<SendPacket*>(MAX_MATRIX_THREAD, MAX_MATRIX_THREAD, MAX_MATRIX_QUEUE_SIZE);
-        mLinkQueue      = new MatrixQueue<Link*>(MAX_MATRIX_THREAD, MAX_MATRIX_THREAD, MAX_MATRIX_QUEUE_SIZE);
-#else
-#ifdef USE_MATRIX_QUEUE2
         mSendQueue      = new MatrixQueue<SendPacket*>(MAX_MATRIX_QUEUE_SIZE);
         mLinkQueue      = new MatrixQueue<Link*>(MAX_MATRIX_QUEUE_SIZE);
-#endif
 #endif
     }
     ~Trigger()
@@ -438,12 +444,7 @@ public:
 #ifdef USE_MATRIX_QUEUE
         bool r = mLinkQueue->Push(link);
 #else
-
-#ifdef USE_MATRIX_QUEUE2
-        bool r = mLinkQueue->Push(link);
-#else
         bool r = mLinkQueue.enqueue(link);
-#endif
 #endif
         if (!r)
         {
@@ -463,11 +464,7 @@ public:
 #ifdef USE_MATRIX_QUEUE
         bool r = mSendQueue->Push(packet);
 #else
-#ifdef USE_MATRIX_QUEUE2
-        bool r = mSendQueue->Push(packet);
-#else
         bool r = mSendQueue.enqueue(packet);
-#endif
 #endif
         if (!r)
         {
@@ -504,11 +501,7 @@ public:
 #ifdef USE_MATRIX_QUEUE
             if (mLinkQueue->Pop(link))
 #else
-#ifdef USE_MATRIX_QUEUE2
-            if (mLinkQueue->Pop(link))
-#else
             if (mLinkQueue.try_dequeue(link))
-#endif
 #endif
             {
                 if (link)
@@ -529,11 +522,7 @@ public:
 #ifdef USE_MATRIX_QUEUE
             bool result = mSendQueue->Pop(packet);
 #else
-#ifdef USE_MATRIX_QUEUE2
-            bool result = mSendQueue->Pop(packet);
-#else
             bool result = mSendQueue.try_dequeue(packet);
-#endif
 #endif
             if (!result || !packet)
                 return send_num;
@@ -616,11 +605,7 @@ private:
 #ifdef USE_MATRIX_QUEUE
             if (mSendQueue->size() > 0 || mLinkQueue->size() > 0)
 #else
-#ifdef USE_MATRIX_QUEUE2
-            if (mSendQueue->size() > 0 || mLinkQueue->size() > 0)
-#else
             if (mSendQueue.size_approx() > 0 || mLinkQueue.size_approx() > 0)
-#endif
 #endif
             {
                 wait_time = 0;
@@ -690,13 +675,8 @@ private:
     MatrixQueue<SendPacket*>                    *mSendQueue;
     MatrixQueue<Link*>                          *mLinkQueue;
 #else
-#ifdef USE_MATRIX_QUEUE2
-    MatrixQueue<SendPacket*>                    *mSendQueue;
-    MatrixQueue<Link*>                          *mLinkQueue;
-#else
     moodycamel::ConcurrentQueue<SendPacket*>    mSendQueue;
     moodycamel::ConcurrentQueue<Link*>          mLinkQueue;
-#endif
 #endif
     TcpMotor*               mMotor;
     int                     mDriveFd;//eventfd 用于接收连接和发送数据，避免线程空跑
