@@ -1,6 +1,5 @@
 # Overview:
 TcpMotor is a minimal tcp transmit lib, whitch has lock-free, multi-thread, only-header, using c++11 and high performance features.
-
 # Design:(improving)
 ## OneQueue
 	a single-producer, single-consumer lock-free queue.
@@ -8,7 +7,6 @@ TcpMotor is a minimal tcp transmit lib, whitch has lock-free, multi-thread, only
 	a multi-producer, multi-consumer lock-free queue. using OneQueue.
 ## TcpMotor
 	using MatrixQueue.
-
 # Usage:
 1. copy tcpmotor.h and matrixqueue.h into your project.
 2. include the header.
@@ -17,18 +15,18 @@ TcpMotor is a minimal tcp transmit lib, whitch has lock-free, multi-thread, only
 ```
 3. code.
 ```cpp
-    dcore::TcpMotor *server = new dcore::TcpMotor(port, 5);
-    //receive handle, 接收消息会回调该接口
-    dcore::TcpRecvHandler *handler = new TestTcpRecvHandler();
-    server->SetRecvHandler(handler);
-    //启动
-    server->Run();
-    //发送数据
-    std::string data = "hello";
-    server->Send(ip, port, data.c_str(), data.size(), NULL);
-    //停止,清理内存
-    server->Stop();
-    delete server;
+dcore::TcpMotor *server = new dcore::TcpMotor(port, 5);
+//receive handle, 接收消息会回调该接口
+dcore::TcpRecvHandler *handler = new TestTcpRecvHandler();
+server->SetRecvHandler(handler);
+//启动
+server->Run();
+//发送数据
+std::string data = "hello";
+server->Send(ip, port, data.c_str(), data.size(), NULL);
+//停止,清理内存
+server->Stop();
+delete server;
 ```
 ## Notice:
 1. in matrixqueue.h
@@ -38,11 +36,9 @@ TcpMotor is a minimal tcp transmit lib, whitch has lock-free, multi-thread, only
 ```
 
 # Test
-## 生产环境
-	centos7, 24cpu
+## 生产环境 centos7 24cpu
 
-	跨机房 cpu:3%
-	using matrixqueue.h
+	跨机房 cpu:3% using matrixqueue_fixed_size.h
 
 	msg_len     [1024]
 	qps         [96175]
@@ -61,7 +57,7 @@ TcpMotor is a minimal tcp transmit lib, whitch has lock-free, multi-thread, only
 	average     [87]
 	sumCount    [680000]
 
-## 本地机器
+## 本地机器 docker centos7 6cpu
 	using matrixqueue.h
 
 	msg_len     [1024]
@@ -113,3 +109,5 @@ TcpMotor is a minimal tcp transmit lib, whitch has lock-free, multi-thread, only
 	3.增强健壮性
 	4.压测
 	5.queue验证正确性
+	6.增加单测
+	7.继续提高MatrixQueue性能
