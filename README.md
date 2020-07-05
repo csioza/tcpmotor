@@ -12,31 +12,29 @@ TcpMotor is a minimal tcp transmit lib, whitch has lock-free, multi-thread, only
 # Usage:
 1. copy tcpmotor.h and matrixqueue.h into your project.
 2. include the header.
-```
+```cpp
 #include "tcpmotor.h"
 ```
 3. code.
-```
-   	dcore::TcpMotor *server = new dcore::TcpMotor(port, 5);
-	//receive handle, 接收消息会回调该接口
+```cpp
+    dcore::TcpMotor *server = new dcore::TcpMotor(port, 5);
+    //receive handle, 接收消息会回调该接口
     dcore::TcpRecvHandler *handler = new TestTcpRecvHandler();
     server->SetRecvHandler(handler);
-	//启动
+    //启动
     server->Run();
-	......
-	//发送数据
-	std::string data = "hello";
+    //发送数据
+    std::string data = "hello";
     server->Send(ip, port, data.c_str(), data.size(), NULL);
-	......
-	//停止,清理内存
+    //停止,清理内存
     server->Stop();
     delete server;
 ```
 ## Notice:
 1. in matrixqueue.h
-```
-#define MATRIX_QUEUE_NUM_MAX_INDEX      1024    //一个进程创建MatrixQueue最大数量，注意要设置足够大，避免越界
-#define MATRIX_QUEUE_ARRAY_MAX_NUM      1024    //MatrixQueue中生产者消费者矩阵大小，注意要设置足够大，避免越界
+```cpp
+#define MATRIX_QUEUE_NUM_MAX_INDEX 1024 //一个进程创建MatrixQueue最大数量，注意要设置足够大，避免越界
+#define MATRIX_QUEUE_ARRAY_MAX_NUM 1024 //MatrixQueue中生产者消费者矩阵大小，注意要设置足够大，避免越界
 ```
 
 # Test
