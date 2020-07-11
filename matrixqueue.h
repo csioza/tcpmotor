@@ -21,14 +21,16 @@
 #pragma once
 #include <atomic>
 
-#define INVALID_NUM                     -1
-#define MATRIX_QUEUE_MAX_STEP           3
 #define MATRIX_QUEUE_NUM_MAX_INDEX      1024    //一个进程创建MatrixQueue最大数量，注意要设置足够大，避免越界
 #define MATRIX_QUEUE_ARRAY_MAX_NUM      1024    //MatrixQueue中生产者消费者矩阵大小，注意要设置足够大，避免越界
 #define MATRIX_QUEUE_ARRAY_INIT_NUM     8       //保证初始化不久后的性能
 
+#define INVALID_NUM                     -1
+#define MATRIX_QUEUE_MAX_STEP           3
+
 template <typename T>
-class OneQueue {
+class OneQueue 
+{
 public:
     OneQueue(size_t qlen) : qlen_(qlen), head_(0), tail_(0) { array_ = new T[qlen]; }
     OneQueue(OneQueue const&) = delete;
@@ -36,32 +38,38 @@ public:
     OneQueue(OneQueue const&&) = delete;
     OneQueue& operator=(OneQueue const&&) = delete;
     ~OneQueue() { delete[] array_; }
-    bool Push(const T& val) { 
-        if (free_size() <= 0)
-            return false;
+    bool Push(const T& val) 
+    {
+        size_t head = head_.load(std::memory_order_acquire);
         size_t tail = tail_.load(std::memory_order_acquire);
+        if (((head > tail) ? (head - 1 - tail) : (head - 1 + qlen_ - tail)) <= 0)
+            return false;
         array_[tail++] = val;
         if (tail >= qlen_)
             tail -= qlen_;
         tail_.store(tail, std::memory_order_release);
         return true;
     }
-    bool Pop(T& ptr) {
-        if (used_size() <= 0)
-            return false;
+    bool Pop(T& ptr) 
+    {
         size_t head = head_.load(std::memory_order_acquire);
+        size_t tail = tail_.load(std::memory_order_acquire);
+        if (((tail >= head) ? (tail - head) : (tail + qlen_ - head)) <= 0)
+            return false;
         ptr = std::move(array_[head++]);
         if (head >= qlen_)
             head -= qlen_;
         head_.store(head, std::memory_order_release);
         return true;
     }
-    inline size_t used_size() {
+    inline size_t used_size() 
+    {
         size_t head = head_.load(std::memory_order_acquire);
         size_t tail = tail_.load(std::memory_order_acquire);
         return (tail >= head) ? (tail - head) : (tail + qlen_ - head);
     }
-    inline size_t free_size() {
+    inline size_t free_size() 
+    {
         size_t head = head_.load(std::memory_order_acquire);
         size_t tail = tail_.load(std::memory_order_acquire);
         return (head > tail) ? (head - 1 - tail) : (head - 1 + qlen_ - tail);
@@ -74,7 +82,8 @@ private:
 };
 
 template <typename T>
-class MatrixQueue {
+class MatrixQueue
+{
 public:
     MatrixQueue(int qlen) : producter_num_(0), consumer_num_(0), onequeue_len_(qlen)
     {
@@ -88,7 +97,7 @@ public:
     MatrixQueue(MatrixQueue const&&) = delete;
     MatrixQueue& operator=(MatrixQueue const&) = delete;
     MatrixQueue& operator=(MatrixQueue const&&) = delete;
-    ~MatrixQueue() 
+    ~MatrixQueue()
     {
         for (int i = 0; i < MATRIX_QUEUE_ARRAY_INIT_NUM; ++i)
             for (int j = 0; j < MATRIX_QUEUE_ARRAY_INIT_NUM; ++j)
@@ -101,7 +110,8 @@ public:
                 }
             }
     }
-    bool Push(const T& val) {
+    bool Push(const T& val)
+    {
         if (tl_producter_indexs_[matrix_queue_id_] == INVALID_NUM)
         {
             tl_producter_indexs_[matrix_queue_id_] = producter_num_.fetch_add(1, std::memory_order_release);
@@ -112,7 +122,7 @@ public:
             }
         }
         size_t cur_consumer_num = consumer_num_.load(std::memory_order_relaxed);
-        OneQueue<T> *aim_queue = nullptr;
+        OneQueue<T> *aim_queue  = nullptr;
         if (cur_consumer_num >= 0)
         {
             int min_size    = 100000000;
@@ -142,7 +152,8 @@ public:
             return true;
         return false;
     }
-    bool Pop(T& ptr) {
+    bool Pop(T& ptr) 
+    {
         if (tl_consumer_indexs_[matrix_queue_id_] == INVALID_NUM)
         {
             tl_consumer_indexs_[matrix_queue_id_] = consumer_num_.fetch_add(1, std::memory_order_release);
@@ -153,7 +164,7 @@ public:
             }
         }
         size_t cur_producter_num = producter_num_.load(std::memory_order_acquire);
-        OneQueue<T> *aim_queue = nullptr;
+        OneQueue<T> *aim_queue   = nullptr;
         if (cur_producter_num > 0)
         {
             int max_size    = 0;
@@ -177,7 +188,8 @@ public:
             return true;
         return false;
     }
-    inline size_t size() {
+    inline size_t size() 
+    {
         size_t res = 0;
         size_t cur_producter_num = producter_num_.load(std::memory_order_relaxed);
         size_t cur_consumer_num  = consumer_num_.load(std::memory_order_relaxed);

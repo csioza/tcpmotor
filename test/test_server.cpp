@@ -18,11 +18,11 @@ public:
     virtual ~TestTcpRecvHandler() {}
     virtual void OnRecv(std::string callback_ip, int callback_port, char* content, int contentLen) 
     {
-        static int64 last = dcore::TimeUtil::NowTimeUs();
+        static int64_t last = dcore::TimeUtil::NowTimeUs();
         std::string data(content, content + contentLen);
         std::string time(content, content + 16);
-        int64 now = dcore::TimeUtil::NowTimeUs();
-        int64 sub = now - stoll(time);
+        int64_t now = dcore::TimeUtil::NowTimeUs();
+        int64_t sub = now - stoll(time);
         if (sub < 500)
             us0_499++;
         else if (sub < 1000)
@@ -72,7 +72,7 @@ public:
         if (sumCount != 0 && sumCount % 10000 == 0)
         {
             average = sumSub / sumCount;
-            int64 qps = sumCount * 1000000 / (dcore::TimeUtil::NowTimeUs() - last);
+            int64_t qps = sumCount * 1000000 / (dcore::TimeUtil::NowTimeUs() - last);
 
             printf("\nmsg_len     [%ld]\nqps         [%ld]\nus0_499     [%ld]\nus500_999   [%ld]\nms1_9       [%ld]\nms10_19     [%ld]\nms20_29     [%ld]\nms30_39     [%ld]\nms40_49     [%ld]\nms50_59     [%ld]\nms60_69     [%ld]\nms70_79     [%ld]\nms80_89     [%ld]\nms90_99     [%ld]\nms100_199   [%ld]\nms200_299   [%ld]\nms300_399   [%ld]\nms400_499   [%ld]\nms500_599   [%ld]\nms600_699   [%ld]\nms700_799   [%ld]\nms800_899   [%ld]\nms900_999   [%ld]\nms1000X     [%ld]\naverage     [%ld]\nsumCount    [%ld]\n" ,
                 /*data.c_str(), */contentLen, qps,
@@ -108,31 +108,31 @@ public:
         // printf("TcpRecvHandler::OnRecv from ip[%s], port[%d], content[%s], contentLen[%d], sub[%d]\n",
         //         callback_ip.c_str(), callback_port, data.c_str(), contentLen, now - stoll(data));
     }
-    std::atomic<int64> sumCount;
-    int64 us0_499;
-    int64 us500_999;
-    int64 ms1_9;
-    int64 ms10_19;
-    int64 ms20_29;
-    int64 ms30_39;
-    int64 ms40_49;
-    int64 ms50_59;
-    int64 ms60_69;
-    int64 ms70_79;
-    int64 ms80_89;
-    int64 ms90_99;
-    int64 ms100_199;
-    int64 ms200_299;
-    int64 ms300_399;
-    int64 ms400_499;
-    int64 ms500_599;
-    int64 ms600_699;
-    int64 ms700_799;
-    int64 ms800_899;
-    int64 ms900_999;
-    int64 ms1000X;
-    int64 sumSub;
-    int64 average;
+    std::atomic<int64_t> sumCount;
+    int64_t us0_499;
+    int64_t us500_999;
+    int64_t ms1_9;
+    int64_t ms10_19;
+    int64_t ms20_29;
+    int64_t ms30_39;
+    int64_t ms40_49;
+    int64_t ms50_59;
+    int64_t ms60_69;
+    int64_t ms70_79;
+    int64_t ms80_89;
+    int64_t ms90_99;
+    int64_t ms100_199;
+    int64_t ms200_299;
+    int64_t ms300_399;
+    int64_t ms400_499;
+    int64_t ms500_599;
+    int64_t ms600_699;
+    int64_t ms700_799;
+    int64_t ms800_899;
+    int64_t ms900_999;
+    int64_t ms1000X;
+    int64_t sumSub;
+    int64_t average;
 };
 
 int main(int argc, char *argv[])
