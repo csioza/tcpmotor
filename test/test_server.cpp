@@ -142,47 +142,6 @@ int main(int argc, char *argv[])
     //     return 0;
     // }
 
-
-    // const int thread_num = 8;
-    // MatrixQueue<int> *queue = new MatrixQueue<int>(32,1000);
-    // std::thread t[thread_num];
-    // for (int i = 0; i < thread_num; ++i)
-    // {
-    //     t[i] = std::thread([=](){
-    //         if (i % 2 == 0)
-    //         {
-    //             for (int j = 0; j < 100; ++j)
-    //             {
-    //                 queue->Push(i * 100 + j);
-    //             }
-    //         }
-    //         else
-    //         {
-    //             //while(true)
-    //             for (int j = 0; j < 200; ++j)
-    //             {
-    //                 int m = 10000;
-    //                 if (queue->Pop(m))
-    //                 {
-    //                     //std::cout << m << std::endl;
-    //                 }
-    //                 usleep(1000);
-    //             }
-    //         }
-    //     });
-    //     //a.detach();
-    // }
-    // for (int i = 0; i < thread_num; ++i)
-    // {
-    //     t[i].join();
-    // }
-    // usleep(1000000);
-    // std::cout << queue->size() << std::endl;
-    // while(1)
-    // {
-    //     usleep(1000000);
-    // }
-
     int port = atoi(argv[1]);
 
     dcore::TcpMotor *server = new dcore::TcpMotor(port, 5);

@@ -114,6 +114,13 @@ std::string RandomString(int len)
     std::string result = c;
     return result;
 }
+uint64_t HashCode(const std::string &v)
+{
+    uint64_t r = 0;
+    for (int i = 0; i < v.size(); i++)
+        r = 17 * r + v[i];
+    return r;
+}
 int Mod(uint64_t key, uint64_t mod) { return key % mod;}
 ///////////////////////////////////////////////////////////////////////////////
 //handler class

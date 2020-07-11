@@ -159,23 +159,6 @@ int main(int argc, char *argv[])
     server->SetRecvHandler(handler);
     server->Run();
 
-    // dcore::TcpMotor *server2 = new dcore::TcpMotor(11123);
-    // dcore::TcpRecvHandler * handler2 = new TestTcpRecvHandler();
-    // server2->SetRecvHandler(handler2);
-    // server2->Run();
-    // dcore::TcpMotor *server3 = new dcore::TcpMotor(11133);
-    // dcore::TcpRecvHandler * handler3 = new TestTcpRecvHandler();
-    // server3->SetRecvHandler(handler3);
-    // server3->Run();
-    // dcore::TcpMotor *server4 = new dcore::TcpMotor(11132);
-    // dcore::TcpRecvHandler * handler4 = new TestTcpRecvHandler();
-    // server4->SetRecvHandler(handler4);
-    // server4->Run();
-    // dcore::TcpMotor *server5 = new dcore::TcpMotor(11222);
-    // dcore::TcpRecvHandler * handler5 = new TestTcpRecvHandler();
-    // server5->SetRecvHandler(handler5);
-    // server5->Run();
-
     std::string tail = dcore::RandomString(packet_size);
     int run_time = atoi(argv[6]);
     int endtime = dcore::TimeUtil::NowTimeS() + run_time;
@@ -183,104 +166,20 @@ int main(int argc, char *argv[])
     while (count < 100000000)//endtime > dcore::TimeUtil::NowTimeS()) 
     {
         std::string data = std::to_string(dcore::TimeUtil::NowTimeUs()) + tail;
+        uint64_t hash = dcore::HashCode(data);
+        data += std::to_string(hash);
         //memcpy(content, data.c_str(), data.size());
         for (int i = 0; i < max; ++i)
         {
             server->Send(ip, port, data.c_str(), data.size(), NULL);
             count++;
         }
-        // for (int i = 0; i < 3; ++i)
-        // {
-        //     server->Send(ip, port, content, data.size(), NULL);
-        //     server2->Send(ip, port, content, data.size(), NULL);
-        //     server3->Send(ip, port, content, data.size(), NULL);
-        //     server4->Send(ip, port, content, data.size(), NULL);
-        //     server5->Send(ip, port, content, data.size(), NULL);
-        //     count += 5;
-        // }
-        // server->Send(ip, port, content, data.size(), NULL);
-        // count++;
-        // usleep(1);
-        // server->Send(ip, port, content, data.size(), NULL);
-        // count++;
-        // server->Send(ip, port, content, data.size(), NULL);
-        // count++;
-        // usleep(1);
-        // server->Send(ip, port, content, data.size(), NULL);
         if (count % 10000 == 0)
         {
             printf("send packet num %d\n",count);
         }
         usleep(sleep_time);
     }
-    ////////////////////////////////////////////////////////
-    // std::string ip = argv[1];
-    // int port = atoi(argv[2]);
-    // const int max = atoi(argv[3]);
-    // int sleep_time = atoi(argv[4]);
-    // int packet_size = atoi(argv[5]);
-    // packet_size = packet_size > 16 ? packet_size - 16 : packet_size;
-    // std::string tail = dcore::RandomString(packet_size);
-    // int run_time = atoi(argv[6]);
-
-    // int *fds = new int[max];
-    // memset(fds, 0 , sizeof(fds));
-    // int endtime = dcore::TimeUtil::NowTimeS() + run_time;
-    // while (endtime > dcore::TimeUtil::NowTimeS()) 
-    // {
-    //     for (int j = 0; j < max; ++j)
-    //     {
-    //         if (fds[j] == 0)
-    //         {
-    //             int sfd = dcore::SocketUtil::Connect(ip, port);
-    //             if (sfd < 0 || dcore::SocketUtil::Setsockopt(sfd) < 0)
-    //                 continue;
-    //             fds[j] = sfd;
-    //         }
-    //         std::string data        = std::to_string(dcore::TimeUtil::NowTimeUs()) + tail;
-    //         int len                 = data.size() + sizeof(dcore::Packet);
-    //         dcore::Packet *packet   = (dcore::Packet *)malloc(len);
-    //         packet->len             = len;
-    //         memcpy(packet->data, data.c_str(), data.size());
-
-    //         int want_len = len;
-    //         int gone_len = 0;
-    //         while (want_len > 0)
-    //         {
-    //             int n = send(fds[j], (char *)packet + gone_len, want_len, MSG_NOSIGNAL);
-    //             // printf("Sent Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d]\n", 
-    //             //    ip.c_str(), 11111, fds[j], gone_len, want_len, n);
-    //             if (n >= 0)
-    //             {
-    //                 gone_len += n;
-    //                 want_len -= n;
-    //                 // if (want_len > 0)
-    //                 //     printf("Sent Half Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d]\n", 
-    //                 //        ip.c_str(), 11111, fds[j], gone_len, want_len, n);
-    //             }
-    //             else
-    //             {
-    //                 printf("Sent Fail Packet: send to ip[%s], port[%5d], fd[%5d], gone_len[%2d], want_len[%2d], n[%2d]\n", 
-    //                    ip.c_str(), 11111, fds[j], gone_len, want_len, n);
-    //                 usleep(10);
-    //                 ++failed_num;
-    //                 close(fds[j]);
-    //                 fds[j] = 0;
-    //                 break;
-    //             }
-    //         }
-    //         all_num++;
-    //         if (all_num % 100000 == 0)
-    //         {
-    //             printf("\nall_num[%ld], failed_num[%ld], succ_rate[%ld]\n", all_num, failed_num, 1000000 - failed_num * 1000000 / all_num);
-    //         }
-    //         delete packet;
-    //         //usleep(10);
-    //     }
-    //     usleep(sleep_time);
-    // }
-
-    // delete[] fds;
 
     return 0;
 }
