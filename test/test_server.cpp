@@ -25,9 +25,8 @@ public:
         if (cur_hash != data_hash)
         {
             err_pack++;
-            //printf("\ndata %s contentLen %d data_hash[%s] != cur_hash[%s]\n", data.c_str(), contentLen, data_hash.c_str(), cur_hash.c_str());
+            printf("\ndata %s contentLen %d data_hash[%s] != cur_hash[%s]\n", data.c_str(), contentLen, data_hash.c_str(), cur_hash.c_str());
         }
-        printf("\ndata %s contentLen %d data_hash[%s] != cur_hash[%s]\n", data.c_str(), contentLen, data_hash.c_str(), cur_hash.c_str());
         
         std::string time(content, content + 16);
         int64_t now = dcore::TimeUtil::NowTimeUs();
