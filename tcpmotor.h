@@ -121,6 +121,21 @@ uint64_t HashCode(const std::string &v)
         r = 17 * r + v[i];
     return r;
 }
+const std::string A16 = "0123456789abcdef";
+std::string HashCodeString(const std::string &v)
+{
+    std::string s = "";
+    uint64_t r = 0;
+    for (int i = 0; i < v.size(); i++)
+        r = 17 * r + v[i];
+    while (r != 0)
+    {
+        int a = r & 0xF;
+        s += A16[a];
+        r >>= 4;
+    }
+    return s;
+}
 int Mod(uint64_t key, uint64_t mod) { return key % mod;}
 ///////////////////////////////////////////////////////////////////////////////
 //handler class

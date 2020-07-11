@@ -109,3 +109,7 @@ delete server;
 	5.queue验证正确性
 	6.增加单测
 	7.继续提高MatrixQueue性能
+
+# Bug 
+	1.发送仅一个包，当ctrl-c时对方才能收到数据
+	2.接收数据不完整，少字节

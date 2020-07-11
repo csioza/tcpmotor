@@ -163,11 +163,12 @@ int main(int argc, char *argv[])
     int run_time = atoi(argv[6]);
     int endtime = dcore::TimeUtil::NowTimeS() + run_time;
     int count = 0;
-    while (count < 100000000)//endtime > dcore::TimeUtil::NowTimeS()) 
+    while (endtime > dcore::TimeUtil::NowTimeS()) 
     {
         std::string data = std::to_string(dcore::TimeUtil::NowTimeUs()) + tail;
-        uint64_t hash = dcore::HashCode(data);
-        data += std::to_string(hash);
+        std::string hash = dcore::HashCodeString(data);
+        data += hash;
+        //printf("hash %s data %s\n",hash.c_str(), data.c_str());
         //memcpy(content, data.c_str(), data.size());
         for (int i = 0; i < max; ++i)
         {
@@ -181,5 +182,10 @@ int main(int argc, char *argv[])
         usleep(sleep_time);
     }
 
+    while (1)
+    {
+        usleep(1000000000);
+    }
+    
     return 0;
 }
