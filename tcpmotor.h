@@ -128,7 +128,7 @@ std::string HashCodeString(const std::string &v)
     uint64_t r = 0;
     for (int i = 0; i < v.size(); i++)
         r = 17 * r + v[i];
-    while (r != 0)
+    for (size_t i = 0; i < 16; i++)
     {
         int a = r & 0xF;
         s += A16[a];

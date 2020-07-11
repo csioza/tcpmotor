@@ -163,12 +163,12 @@ int main(int argc, char *argv[])
     int run_time = atoi(argv[6]);
     int endtime = dcore::TimeUtil::NowTimeS() + run_time;
     int count = 0;
-    while (endtime > dcore::TimeUtil::NowTimeS()) 
+    //while (endtime > dcore::TimeUtil::NowTimeS()) 
     {
         std::string data = std::to_string(dcore::TimeUtil::NowTimeUs()) + tail;
         std::string hash = dcore::HashCodeString(data);
         data += hash;
-        //printf("hash %s data %s\n",hash.c_str(), data.c_str());
+        //printf("data.size %d hash %s data %s\n",data.size(), hash.c_str(), data.c_str());
         //memcpy(content, data.c_str(), data.size());
         for (int i = 0; i < max; ++i)
         {
