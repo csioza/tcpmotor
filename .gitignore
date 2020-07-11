@@ -8,7 +8,7 @@ test/s
 test/c
 test/tcpmotor.h
 test/tcpmotor2.h
-test/concurrentqueue2.h
+test/concurrentqueue.h
 test/onequeue.h
 test/matrixqueue.h
 test/matrixqueue2.h
