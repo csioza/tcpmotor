@@ -4,8 +4,7 @@
 obj/
 test/server
 test/client
-test/s
-test/c
+test/unittest
 test/tcpmotor.h
 test/tcpmotor2.h
 test/concurrentqueue.h
