@@ -111,6 +111,3 @@ delete server;
 	7.继续提高MatrixQueue性能
 	8.统计各个queue的进出数量
 	9.检查各个memcpy,有没有覆盖拷贝的情况
-
-# Bug 
-	1.发送仅一个包，当ctrl-c时对方才能收到数据, 没有复现, 待观察
