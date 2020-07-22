@@ -210,6 +210,22 @@ public:
         Ip = ipStr;
         return true;
     }
+    static std::string GetLocalIp() 
+    {
+        std::string ip = "";
+        char name[256];
+        gethostname(name, sizeof(name));
+        struct hostent* host = gethostbyname(name);
+        char ipStr[32];
+        const char* ret = inet_ntop(host->h_addrtype, host->h_addr_list[0], ipStr, sizeof(ipStr));
+        if (NULL == ret) 
+        {
+            std::cout << "hostname transform to ip failed" << std::endl;
+            return ip;
+        }
+        ip = ipStr;
+        return ip;
+    }
     static uint64_t MakeKeyByIpPort(const std::string &ip, int port)
     {
         struct in_addr ip_addr;
@@ -428,10 +444,9 @@ public:
     void Stop()
     {
         mIsRunning = false;
+        DelAllLink();
         if (mThread.joinable())
             mThread.join();
-        for (auto it : mIpPortLink)
-            DelLink(it.second);
     }
     int AddLink(Link *link)
     {
@@ -626,14 +641,37 @@ private:
     }
     int DelLink(Link *link)
     {
+        if (!link)
+            return INVALID_NUM;
         int result  = epoll_ctl(mEpollFd, EPOLL_CTL_DEL, link->mFd, NULL);//TODO 删除失败情况
         auto it     = mIpPortLink.find(link->mKey);
         if (it != mIpPortLink.end())
             mIpPortLink.erase(it);
-        std::cout << "DelLink mFd=" << std::to_string(link->mFd) << ", result=" << std::to_string(result) << std::endl;
+        if (result != 0)
+        {
+            std::cout << "DelLink mFd=" << std::to_string(link->mFd) 
+                    << ", result=" << std::to_string(result) << ", errno=" << errno << std::endl;
+        }
         close(link->mFd);
         delete link;
         return result;
+    }
+    void DelAllLink()
+    {
+        for (auto it : mIpPortLink)
+        {
+            auto link   = it.second;
+            if (!link)
+                continue;
+            int result  = epoll_ctl(mEpollFd, EPOLL_CTL_DEL, link->mFd, NULL);
+            if (result != 0)
+            {
+                std::cout << "DelLink mFd=" << std::to_string(link->mFd) << ", result=" << std::to_string(result) 
+                        << ", errno=" << errno << std::endl;
+            }
+            close(link->mFd);
+            delete link;
+        }
     }
     int ModLink(Link *link, bool isWrite)
     {

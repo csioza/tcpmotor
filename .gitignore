@@ -12,6 +12,7 @@ test/onequeue.h
 test/matrixqueue.h
 test/matrixqueue2.h
 test/CMakeLists.txt
+test/core
 o/
 emit/
 *.out
